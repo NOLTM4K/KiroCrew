@@ -348,7 +348,13 @@ def _url_payload_command(n: int) -> str:
 #: spares an ordered alphabet and a data URI payload, the flag it sets, the one place pass 3
 #: reads it, and the two checks that tell those shapes from a key. No credential branch, gate
 #: verdict or other pass moved.
-_PACKAGE_LINE_BUDGET = 29_411
+#:
+#: Raised again, from 29,411, for the data-exfiltration gate's normalized argv
+#: view and raw fail-closed body-file substrings. The normalized view covers
+#: carriers and respelled programs without one spelling-chase per wrapper; the
+#: shared shell reader and its tests carry the supporting token/assignment
+#: machinery.
+_PACKAGE_LINE_BUDGET = 30_589
 
 #: Ceiling on any ONE file in the package. This is what the bound is really for --
 #: a package total says nothing about a single file growing back into a second
