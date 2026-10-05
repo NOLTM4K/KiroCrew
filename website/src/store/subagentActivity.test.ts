@@ -197,8 +197,9 @@ describe('selectSubagentActivityCount', () => {
 
     store.dispatch(reconcileSubagentApprovalGone({
       slot: 'a', id: 'p1', approval_id: 'ap-1',
-      // Registered 25 minutes ago; a finished row carries no elapsed of its own.
-      agent: { id: 'p1', task: 'wait', done: true, started: Date.now() / 1000 - 1500, ...row },
+      // Registered long ago (a fixed epoch second, so the test reads no clock);
+      // a finished row carries no elapsed of its own.
+      agent: { id: 'p1', task: 'wait', done: true, started: 1_790_000_000, ...row },
     }))
 
     const card = (store.getState() as unknown as RootState).chat.subagents.p1
