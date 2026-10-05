@@ -31,10 +31,13 @@ if TYPE_CHECKING:
         effective_session_key,
         get_reasoning_effort_ordered,
         get_reasoning_effort_values,
+        harness_effort,
         logger,
         model_registry,
+        own_models_backend,
         read_bounded_json,
         relay_archive_refusal,
+        resolve_effective_model,
         slot_not_found,
     )
 
@@ -49,6 +52,13 @@ async def _configured_backend_for_slot(slot: _ChatSlot) -> str:
         config.agent.member_acp_backend,
         config.agent.acp_backend,
     )
+
+
+async def _own_models_field(backend: str) -> dict[str, str]:
+    """``models_backend`` for a slot on *backend*, when its pickers need that backend's list."""
+    config = await asyncio.to_thread(KiroCrewConfig.load)
+    own = own_models_backend(backend, config.agent.acp_backend)
+    return {} if own is None else {"models_backend": own}
 
 
 async def api_chat_slot_selection_capabilities(request: web.Request) -> web.Response:
@@ -71,10 +81,20 @@ async def api_chat_slot_selection_capabilities(request: web.Request) -> web.Resp
         # still knows whether model IDs encode effort, so the picker can render
         # the base rows while live effort options are pending.
         backend = await _configured_backend_for_slot(slot)
+        effort = harness_effort(state, backend, None)
+        if not effort:
+            # The level rides the model here: the slot's pick, else what its crew resolves to.
+            config = await asyncio.to_thread(KiroCrewConfig.load)
+            model = slot.model or await asyncio.to_thread(
+                resolve_effective_model, config, slot.agent or None
+            )
+            effort = harness_effort(state, backend, model)
         return web.json_response(
             {
                 "known": False,
                 "model_effort_pair_ids": backend in ACP_BACKENDS_MODEL_EFFORT_PAIR_IDS,
+                **await _own_models_field(backend),
+                **effort,
             }
         )
     backend = provider.capabilities.backend
@@ -109,6 +129,7 @@ async def api_chat_slot_selection_capabilities(request: web.Request) -> web.Resp
             "effort_supported": supported and bool(levels),
             "effort_levels": levels,
             "model_effort_pair_ids": backend in ACP_BACKENDS_MODEL_EFFORT_PAIR_IDS,
+            **await _own_models_field(backend),
         }
     )
 

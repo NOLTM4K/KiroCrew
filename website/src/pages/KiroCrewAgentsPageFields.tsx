@@ -375,16 +375,19 @@ export function ModelField({ options, value, onChange, hint }: {
 /** The crew's reasoning-effort pin. Rendered only when the model the crew will
  *  actually run on supports effort — the same gate the chat picker uses, so a
  *  crew on Haiku is not offered a control the backend would drop. */
-export function EffortField({ value, onChange }: {
+export function EffortField({ value, onChange, levels }: {
   value: string; onChange: (v: string) => void
+  /** The levels the crew's harness takes; the shared vocabulary when it reported none. */
+  levels?: readonly string[]
 }) {
+  const options = levels ? ['', ...levels.filter(l => l && l !== 'default')] : [...EFFORT_LEVELS]
   return (
     <Field label={i18nT('pages.kiroCrewAgentsPage.reasoning_effort')} hint={i18nT('pages.kiroCrewAgentsPage.reasoning_effort_hint')}>
       <SimpleSelect
-        options={[...EFFORT_LEVELS]}
+        options={options}
         // '' is the inherit sentinel, labelled as such rather than as a level:
         // it means "take the global default", which may itself be a level.
-        optionLabels={EFFORT_LEVELS.map(l => (l === '' ? i18nT('pages.kiroCrewAgentsPage.inherited') : effortLabel(l)))}
+        optionLabels={options.map(l => (l === '' ? i18nT('pages.kiroCrewAgentsPage.inherited') : effortLabel(l)))}
         value={value}
         onChange={onChange}
         aria-label={i18nT('pages.kiroCrewAgentsPage.edit_reasoning_effort')}

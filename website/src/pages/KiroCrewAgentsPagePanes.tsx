@@ -105,26 +105,39 @@ export function CrewEditorHeader({ editing, editingAgent, displayName, editAvata
 }
 
 /** The Model pane: the model and effort pins and what they resolve to. */
-export function CrewModelPane({ modelOptions, editModel, setEditModel, editEffort, setEditEffort, effortModel, effortCapable, resolved, resolvedError }: {
+export function CrewModelPane({ modelOptions, modelsFailed = false, editModel, setEditModel, editEffort, setEditEffort, effortModel, effortCapable, effortLevels, resolved, resolvedError }: {
   modelOptions: string[]
+  /** The pin harness's own model list failed to load; it keeps no last-good copy. */
+  modelsFailed?: boolean
   editModel: string
   setEditModel: (v: string) => void
   editEffort: string
   setEditEffort: (v: string) => void
   effortModel: string
   effortCapable: boolean
-  resolved: { model?: string; pinned?: boolean; reasoning_effort?: string; effort_pinned?: boolean } | undefined
+  /** The levels the pin harness takes, when it reported its own. */
+  effortLevels?: readonly string[]
+  resolved: { model?: string; pinned?: boolean; reasoning_effort?: string; effort_pinned?: boolean; effort_supported?: boolean | null } | undefined
   resolvedError: Error | null
 }) {
   return (
     <>
       <ModelField options={modelOptions} value={editModel} onChange={setEditModel} />
+      {/* No hand-off: the crew sheet's unsaved pane edits (dirtyPanes). Another
+          harness's list keeps no last-good copy, so a failure leaves only Inherited. */}
+      {modelsFailed && (
+        <ErrorNotice
+          className="mt-1"
+          message={i18nT('pages.chatSidebar.model_list_failed')}
+          testId="crew-editor-models-degraded"
+        />
+      )}
       {/* Offered when the model the crew will actually run on
           accepts effort — OR when a pin is already stored on a
           model that does not, so the only way to clear a
           stranded pin is not to first switch the model back. */}
       {(effortCapable || !!editEffort) && (
-        <EffortField value={editEffort} onChange={setEditEffort} />
+        <EffortField value={editEffort} onChange={setEditEffort} levels={effortLevels} />
       )}
       {!effortCapable && !!editEffort && (
         <div className="rounded-md border border-warn-subtle bg-warn-subtle px-3 py-2.5 text-[11.5px] leading-relaxed text-muted">
@@ -134,7 +147,9 @@ export function CrewModelPane({ modelOptions, editModel, setEditModel, editEffor
               substituting the "Inherited" label would read as
               "Inherited does not take a reasoning effort", which
               names no model and states nothing true. */}
-          {effortModel
+          {resolved?.effort_supported === false
+            ? i18nT('pages.kiroCrewAgentsPage.effort_ignored_by_this_backend')
+            : effortModel
             ? i18nT('pages.kiroCrewAgentsPage.effort_ignored_on_this_model', { model: effortModel })
             : i18nT('pages.kiroCrewAgentsPage.effort_pin_needs_a_model')}
         </div>
