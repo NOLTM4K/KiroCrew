@@ -641,7 +641,7 @@ helper and its configuration are unchanged.
 The Task Scheduler backend uses these primitives with `pod._windows_run` durable
 run identities and publisher retirement. Job emptiness alone is not reclamation
 authority. Before attempting `/Run`, a failed start may cancel only its exact
-unclaimed reservation under the supervisor's claim lock. The durable `cancelled`
+unclaimed reservation under the claim lock. The durable `cancelled`
 state refuses admission and survives task/wrapper/result cleanup errors; the next
 `start` retries that cleanup before reserving a new generation. The claim lock
 covers cancellation through receipt deletion. Claimed, malformed or changed-run
@@ -649,6 +649,35 @@ records and unexpected HOME/PID/handoff evidence refuse rollback. A failed or
 raised `/Run` never grants cancellation, even if no publisher has claimed yet.
 If cancellation itself cannot be persisted, the ordinary reservation remains
 unresolved rather than being inferred safe on a later invocation.
+
+The scheduled `pod _run` producer claims its reservation as its first act,
+before the checkout, venv and dist checks, so the record (`preparing`) names it
+by pid plus creation time. A producer whose own claim is refused writes nothing.
+On every exit of a claimed boot the producer, not the task wrapper, writes
+`.winresult`; the wrapper writes no sidecar. A boot that refuses without
+spawning a gateway then publishes a `finished` receipt with its exit code,
+under the claim lock and only over its own unchanged `preparing` record. An
+escaped exception or an unproven Job drain withholds that receipt and leaves
+`preparing`. `finished` certifies that no gateway was spawned; it does not
+cover a descendant of a process started before any lifetime Job existed (the
+child-viability probe), the same residual the ready path accepts.
+
+`stop` retires an unspawned (`preparing` or `finished`) generation only after
+proving its producer gone. It opens the producer by pid and creation identity
+(a recycled pid reads as gone and is never signalled) and refuses to retire its
+own pid. A `preparing` producer is only waited for, never terminated: `stop`
+refuses at its deadline. A `finished` producer is given the whole stop budget
+through `wait_identity` to exit on its own, because the boot's failure audit is
+written after the receipt, and is terminated only if it outlives that budget.
+After the wait, `stop` re-reads the record and refuses unless the generation and
+publisher are unchanged and the state is still unspawned. Then `/End` stops any
+wrapper still unwinding. A supervised-pid record or handoff marker refuses, as
+does a HOME under a `preparing` producer; an evidence path that cannot be
+inspected counts as present. Only then is `retired` published, as a
+compare-and-swap under the claim lock. `finish` consumes `drained` or `retired`
+only once HOME is gone, so a HOME cleanup failure stays retryable. A `reserved`
+record nobody claimed, and a `preparing` record whose dead producer left a HOME,
+still need the manual retirement in `pod/README.md`.
 Native tests exercise owner-only access, descendant containment,
 nested resource jobs and breakaway refusal; injected failures run on all hosts.
 
