@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAppDispatch } from '../store'
 import { createSlot } from '../store/chatSlice'
 import { api, type WebhookTokenEntry } from '../api/client'
+import { acpBackendName } from '../api/acpBackend'
 import { useAvailableModels, useAvailableModelsQuery } from '../hooks/useAvailableModels'
 import { Btn, SendBtn, PageHeader } from '../components/ui'
 import {
@@ -302,6 +303,7 @@ export default function KiroCrewAgentsPage({ embedded }: { embedded?: boolean } 
     INHERIT_MODEL,
     ...pinModelsQuery.data.map((m: { name: string }) => m.name).filter((n: string) => n && n !== INHERIT_MODEL),
   ]
+  const pinHarness = acpBackendName({ id: resolved?.models_backend ?? kirocrewCfg?.agent?.acp_backend ?? '' })
 
   /** The model an effort level would be applied to: the pending pick when the
    *  crew pins one, otherwise whatever the inherit chain resolves to. Reading
@@ -321,7 +323,7 @@ export default function KiroCrewAgentsPage({ embedded }: { embedded?: boolean } 
     : modelPinPendingClear ? '' : (resolved?.model || '')
   // The pin backend's own answer, where its build decides rather than the model.
   const effortCapable = resolved?.effort_supported ?? modelSupportsEffort(effortModel)
-  const effortLevels: string[] | undefined = resolved?.effort_supported ? resolved.effort_levels : undefined
+  const effortLevels: string[] | undefined = resolved?.effort_levels?.length ? resolved.effort_levels : undefined
 
   /** Argument-free so a click event is never mistaken for one. Opens the
    *  simple create dialog (`NewCrewmateDialog`); it owns its own form state, so
@@ -1144,7 +1146,7 @@ export default function KiroCrewAgentsPage({ embedded }: { embedded?: boolean } 
                   )}
 
                   {pane === 'model' && (
-                    <CrewModelPane modelOptions={modelOptions} modelsFailed={pinModelsQuery.isError || pinModelsQuery.isDegraded} editModel={editModel} setEditModel={setEditModel} editEffort={editEffort} setEditEffort={setEditEffort} effortModel={effortModel} effortCapable={effortCapable} effortLevels={effortLevels} resolved={resolved} resolvedError={resolvedError} />
+                    <CrewModelPane modelOptions={modelOptions} pinModelsQuery={pinModelsQuery} pinHarness={pinHarness} servedAs={editModel === editingAgent?.model ? resolved?.pin_served_as : undefined} editModel={editModel} setEditModel={setEditModel} editEffort={editEffort} setEditEffort={setEditEffort} effortModel={effortModel} effortCapable={effortCapable} effortLevels={effortLevels} resolved={resolved} resolvedError={resolvedError} />
                   )}
 
                   {pane === 'place' && (

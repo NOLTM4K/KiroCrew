@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
+from chat_test_helpers import pin_harness_choice
 
 from kiro_crew.dashboard import chat_handlers
 from kiro_crew.dashboard.chat_handlers import api_chat_slot_selection_capabilities
@@ -160,15 +161,16 @@ def crew():
     return "writer"
 
 
-async def _resolved(crew_name: str, *, default: str, member: str) -> dict:
+async def _resolved(crew_name: str, *, default: str, member: str, state: object = None) -> dict:
     from kiro_crew.config.loader import KiroCrewConfig
     from kiro_crew.dashboard.handlers import api_kirocrew_agent_resolved_model
 
     cfg = KiroCrewConfig.load()
-    cfg.agent.acp_backend = default
-    cfg.agent.member_acp_backend = member
     cfg.save()
+    # save() keeps the harness fields as stored, so the choice goes on disk.
+    pin_harness_choice(acp_backend=default, member_acp_backend=member)
     app = web.Application()
+    app["state"] = state
     app.router.add_get("/api/agents/resolved-model", api_kirocrew_agent_resolved_model)
     async with TestClient(TestServer(app)) as client:
         resp = await client.get("/api/agents/resolved-model", params={"agent": crew_name})
@@ -189,3 +191,38 @@ async def test_the_crew_editor_keeps_the_configured_list_on_one_namespace(crew):
     body = await _resolved(crew, default="", member="kas")
 
     assert "models_backend" not in body
+
+
+def _claude_session(*advertised: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        client=SimpleNamespace(backend="claude"),
+        available_models=lambda: [{"modelId": m} for m in advertised],
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("live", "served"),
+    [
+        # The pin keeps the kiro-cli spelling; the gateway sends Claude Code's own id for it.
+        (
+            [_claude_session("claude-opus-5-5", "global.anthropic.claude-opus-5-5[1m]")],
+            "global.anthropic.claude-opus-5-5[1m]",
+        ),
+        ([_claude_session("claude-sonnet-5-5")], ""),
+        # No session has advertised a list: nothing says the pin is not offered.
+        ([], None),
+    ],
+    ids=["served-as-another-id", "not-offered", "unknown"],
+)
+async def test_the_crew_editor_learns_what_the_harness_serves_its_pin_as(crew, live, served):
+    from kiro_crew.config.loader import KiroCrewConfig
+
+    cfg = KiroCrewConfig.load()
+    cfg.agents[crew].model = "claude-opus-5.5"
+    cfg.save()
+    state = SimpleNamespace(sessions=SimpleNamespace(active_providers=lambda: live))
+
+    body = await _resolved(crew, default="", member="claude", state=state)
+
+    assert body.get("pin_served_as") == served

@@ -17,17 +17,20 @@ import { useAutoConnectInstances } from '../../hooks/useAutoConnectInstances'
 import { useCommandPalette } from '../../hooks/useCommandPalette'
 import { useProvider } from '../../providers/context'
 import { modelsQueryKey } from '../../hooks/useAvailableModels'
-import { useAgents } from '../../hooks/useAgents'
 import { i18nT } from '../../i18n/t'
+import { modelSupportsEffort } from '../../lib/effort'
+import { useAgents } from '../../hooks/useAgents'
 import { SESSION_FOLDER_UNAVAILABLE_EVENT } from '../../lib/sessionFolderNotice'
 
 const REASONING_EFFORT_LEVELS = ['', 'low', 'medium', 'high', 'xhigh', 'max']
 
-/** What an effort cycle steps over on *slot*: its harness's levels, '' (default) first, or null
- *  when that harness takes none (see the composer's effort control). */
-function sessionEffortLevels(queryClient: QueryClient, slot: string): string[] | null {
-  const caps = queryClient.getQueryData<{ effort_supported?: boolean; effort_levels?: string[] }>(['slot-selection-capabilities', slot])
-  if (caps?.effort_supported === false) return null
+/** What an effort cycle steps over on *slot*, which runs *model*: its harness's levels, '' (default)
+ *  first, or the notice saying there are none (see the composer's effort control). */
+function sessionEffortLevels(queryClient: QueryClient, slot: string, model: string): string[] | string {
+  const caps = queryClient.getQueryData<{ effort_supported?: boolean | null; effort_levels?: string[] }>(['slot-selection-capabilities', slot])
+  // An unknown effort verdict leaves the selected model to answer.
+  const supported = caps?.effort_supported ?? (!model || modelSupportsEffort(model))
+  if (!supported) return i18nT('pages.chatPage.effort_cycle_unavailable')
   const levels = caps?.effort_levels?.filter(l => l && l !== 'default')
   return levels?.length ? ['', ...levels] : REASONING_EFFORT_LEVELS
 }
@@ -78,6 +81,10 @@ export function useShellKeyboard({ toggleFocusMode, toggleNav, terminalEnabled, 
   const refreshTrigger = useAppSelector(s => s.dashboard.refreshTrigger)
   const { agents: installedAgents, defaultAgent } = useAgents(refreshTrigger)
   const provider = useProvider()
+  // The model a slot runs before it reports: its own pick, else what the composer resolved its crew
+  // to -- the composer's own key (composerChips), app included, so the cache entry it wrote is read.
+  const slotModel = (slot: { model?: string; agent?: string; app?: string | null } | undefined) => slot?.model
+    || queryClient.getQueryData<string>(['resolved-model', slot?.agent || defaultAgent || 'default', provider.id, slot?.app || '']) || ''
   const agentSwitchNotice = useAppSelector(s => s.chat.agentSwitchNotice)
   useEffect(() => {
     if (!agentSwitchNotice) return
@@ -140,8 +147,9 @@ export function useShellKeyboard({ toggleFocusMode, toggleNav, terminalEnabled, 
       // is a REAL effort target (provider default), so this base uses the
       // null-aware accessor — the ''-falsy one would misread an in-flight
       // "back to default" as "nothing pending" and mis-step the burst.
-      const levels = sessionEffortLevels(queryClient, activeSlot)
-      if (!levels) return
+      const levels = sessionEffortLevels(queryClient, activeSlot, slotModel(currentSlot))
+      // A shortcut that silently does nothing reads as broken, so say why instead.
+      if (typeof levels === 'string') { store.dispatch(setAgentSwitchNotice(levels)); return }
       const base = pendingSlotSwitchTarget('reasoning_effort', activeSlot)
         ?? (currentSlot?.reasoning_effort || '')
       const idx = levels.indexOf(base)
@@ -166,8 +174,9 @@ export function useShellKeyboard({ toggleFocusMode, toggleNav, terminalEnabled, 
       const slots = store.getState().dashboard.slots
       const currentSlot = slots.find((s: { key: string }) => s.key === activeSlot)
       // See onCycleReasoningEffort above.
-      const levels = sessionEffortLevels(queryClient, activeSlot)
-      if (!levels) return
+      const levels = sessionEffortLevels(queryClient, activeSlot, slotModel(currentSlot))
+      // A shortcut that silently does nothing reads as broken, so say why instead.
+      if (typeof levels === 'string') { store.dispatch(setAgentSwitchNotice(levels)); return }
       const base = pendingSlotSwitchTarget('reasoning_effort', activeSlot)
         ?? (currentSlot?.reasoning_effort || '')
       const idx = levels.indexOf(base)
@@ -232,6 +241,8 @@ export function useShellKeyboard({ toggleFocusMode, toggleNav, terminalEnabled, 
             return r?.model ?? name
           },
           (value) => store.dispatch(updateSlot({ key: activeSlot, model: value })))
+        // A cold slot's effort answer was judged on its old model; ask again, as the picker does.
+        void queryClient.invalidateQueries({ queryKey: ['slot-selection-capabilities', activeSlot] })
       } catch (e) {
         store.dispatch(setAgentSwitchNotice(agentSwitchFailureMessage(e)))
         // eslint-disable-next-line no-console -- failure diagnostic; the notice above already told the user
@@ -259,6 +270,7 @@ export function useShellKeyboard({ toggleFocusMode, toggleNav, terminalEnabled, 
             return r?.model ?? name
           },
           (value) => store.dispatch(updateSlot({ key: activeSlot, model: value })))
+        void queryClient.invalidateQueries({ queryKey: ['slot-selection-capabilities', activeSlot] })
       } catch (e) {
         store.dispatch(setAgentSwitchNotice(agentSwitchFailureMessage(e)))
         // eslint-disable-next-line no-console -- failure diagnostic; the notice above already told the user

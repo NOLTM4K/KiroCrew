@@ -105,10 +105,14 @@ export function CrewEditorHeader({ editing, editingAgent, displayName, editAvata
 }
 
 /** The Model pane: the model and effort pins and what they resolve to. */
-export function CrewModelPane({ modelOptions, modelsFailed = false, editModel, setEditModel, editEffort, setEditEffort, effortModel, effortCapable, effortLevels, resolved, resolvedError }: {
+export function CrewModelPane({ modelOptions, pinModelsQuery, pinHarness, servedAs, editModel, setEditModel, editEffort, setEditEffort, effortModel, effortCapable, effortLevels, resolved, resolvedError }: {
   modelOptions: string[]
-  /** The pin harness's own model list failed to load; it keeps no last-good copy. */
-  modelsFailed?: boolean
+  /** The pin harness's model list: it keeps no last-good copy, so a failure leaves only Inherited. */
+  pinModelsQuery: { isError: boolean; isDegraded: boolean; isFetching: boolean; refetch: () => unknown }
+  /** That harness's display name. */
+  pinHarness: string
+  /** `resolved-model`'s `pin_served_as` for the stored pin, while it is the one shown. */
+  servedAs?: string
   editModel: string
   setEditModel: (v: string) => void
   editEffort: string
@@ -117,20 +121,27 @@ export function CrewModelPane({ modelOptions, modelsFailed = false, editModel, s
   effortCapable: boolean
   /** The levels the pin harness takes, when it reported its own. */
   effortLevels?: readonly string[]
-  resolved: { model?: string; pinned?: boolean; reasoning_effort?: string; effort_pinned?: boolean; effort_supported?: boolean | null } | undefined
+  resolved: { model?: string; pinned?: boolean; reasoning_effort?: string; effort_pinned?: boolean; effort_supported?: boolean | null; models_backend?: string } | undefined
   resolvedError: Error | null
 }) {
   return (
     <>
-      <ModelField options={modelOptions} value={editModel} onChange={setEditModel} />
+      <ModelField options={modelOptions} value={editModel} onChange={setEditModel} servedAs={servedAs} harness={pinHarness} />
       {/* No hand-off: the crew sheet's unsaved pane edits (dirtyPanes). Another
           harness's list keeps no last-good copy, so a failure leaves only Inherited. */}
-      {modelsFailed && (
-        <ErrorNotice
-          className="mt-1"
-          message={i18nT('pages.chatSidebar.model_list_failed')}
-          testId="crew-editor-models-degraded"
-        />
+      {(pinModelsQuery.isError || pinModelsQuery.isDegraded) && (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <ErrorNotice
+            className="min-w-[12rem] flex-1"
+            message={resolved?.models_backend === undefined
+              ? i18nT('pages.chatSidebar.model_list_failed')
+              : i18nT('pages.kiroCrewAgentsPage.harness_models_failed', { harness: pinHarness })}
+            testId="crew-editor-models-degraded"
+          />
+          <Btn type="button" className="shrink-0" onClick={() => pinModelsQuery.refetch()} disabled={pinModelsQuery.isFetching}>
+            {i18nT('pages.chatSidebar.retry')}
+          </Btn>
+        </div>
       )}
       {/* Offered when the model the crew will actually run on
           accepts effort — OR when a pin is already stored on a
@@ -148,7 +159,7 @@ export function CrewModelPane({ modelOptions, modelsFailed = false, editModel, s
               "Inherited does not take a reasoning effort", which
               names no model and states nothing true. */}
           {resolved?.effort_supported === false
-            ? i18nT('pages.kiroCrewAgentsPage.effort_ignored_by_this_backend')
+            ? i18nT('pages.kiroCrewAgentsPage.effort_ignored_by_this_backend', { harness: pinHarness })
             : effortModel
             ? i18nT('pages.kiroCrewAgentsPage.effort_ignored_on_this_model', { model: effortModel })
             : i18nT('pages.kiroCrewAgentsPage.effort_pin_needs_a_model')}

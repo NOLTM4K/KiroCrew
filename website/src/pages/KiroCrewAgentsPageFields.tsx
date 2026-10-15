@@ -351,19 +351,37 @@ export function MemoryStoreField({ value = '', member, memoryState = 'unavailabl
   )
 }
 
-export function ModelField({ options, value, onChange, hint }: {
+export function ModelField({ options, value, onChange, hint, servedAs, harness = '' }: {
   options: string[]; value: string; onChange: (v: string) => void; hint?: string
+  /** The id the crew's harness serves a stored pin `options` lacks as, `''` for none
+   *  (`resolved-model`'s `pin_served_as`). Omitted while no live session has said. */
+  servedAs?: string
+  /** That harness's name, for a pin it does not offer. */
+  harness?: string
 }) {
+  // A stored pin spelled as another harness spells it is the row it runs as, not a second row for
+  // the same model: two rows read as two models, and the readout below still names the stored id.
+  const folded = servedAs !== undefined && servedAs !== value && options.includes(servedAs)
+  const shown = folded ? options : withCurrent(options, value)
+  // Otherwise the off-list pin says what this harness does with it.
+  const offList = !folded && servedAs !== undefined && servedAs !== value && !options.includes(value)
+  const label = (m: string) => {
+    if (m === INHERIT_MODEL) return i18nT('pages.kiroCrewAgentsPage.inherited')
+    if (m !== value || !offList) return m
+    return servedAs
+      ? i18nT('pages.kiroCrewAgentsPage.pin_runs_as', { model: m, served: servedAs })
+      : i18nT('pages.kiroCrewAgentsPage.pin_not_offered', { model: m, harness })
+  }
   return (
     <Field label={i18nT('pages.kiroCrewAgentsPage.model')} hint={hint}>
       <SimpleSelect
-        options={withCurrent(options, value)}
+        options={shown}
         // The inherit option must NOT read as "auto": in the chat picker "auto"
         // promises task-based routing, whereas here it means "pin nothing,
         // inherit the next tier" — which can resolve to a concrete model. Label
         // it as the card does so the round trip stays honest.
-        optionLabels={withCurrent(options, value).map(m => (m === INHERIT_MODEL ? i18nT('pages.kiroCrewAgentsPage.inherited') : m))}
-        value={value}
+        optionLabels={shown.map(label)}
+        value={folded ? servedAs : value}
         onChange={onChange}
         aria-label={i18nT('pages.kiroCrewAgentsPage.edit_model')}
         {...uiLocation('agents.model')}
