@@ -637,6 +637,7 @@ if TYPE_CHECKING:  # the forwarded names, visible to type checkers and IDEs
         _STANDARD_DIRS,
         _STRICT_DIRS,
         _TIER_ORDINALS,
+        _bundled_kas_targets_cached,
         _clamp_sandbox_mode,
         _clamp_sandbox_mode_to_floor,
         _crew_home_alias_roots,
