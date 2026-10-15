@@ -100,7 +100,7 @@ import { useListboxKeyboard } from '../hooks/useListboxKeyboard'
 import AgentDropdownList, { DefaultAgentRow, ManageAgentsFooter, defaultWriteKind, isCrewmateChat } from '../components/AgentDropdownList'
 import ProjectPicker from '../components/ProjectPicker'
 import { ProjectAwsProfileSection } from '../components/ProjectAwsProfile'
-import InboundLinkChip from '../components/InboundLinkChip'
+import ChatHeaderChips from '../components/ChatHeaderChips'
 import ModelEffortDropdown from '../components/ModelEffortDropdown'
 
 import ChatInput from '../components/ChatInput'
@@ -1791,7 +1791,7 @@ export default function ChatPage({ mode, embedded, embedMode, popout, noUrlSync 
                   />
                 )}
                 </div>
-              <InboundLinkChip slotKey={activeSlot} />
+              <ChatHeaderChips slotKey={activeSlot} />
               {/* Trailing controls grouped under a single ml-auto so multiple
                   right-aligned items don't each absorb free space (two ml-auto
                   siblings split the gap, parking the split icon mid-header). */}
