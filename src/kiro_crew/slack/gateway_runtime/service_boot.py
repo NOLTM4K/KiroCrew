@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     import webbrowser
 
     from kiro_crew.slack.gateway import (
-        _PROFILE_PROJECTION_POLL_S,
         _SIGNING_KEY_PREFLIGHT_TIMEOUT_SECS,
         BOOT_RESTART_HINT,
         MAX_SESSION_TTL_SECS,
@@ -1387,3 +1386,10 @@ async def run(self: GatewayOrchestrator) -> None:
     # Block until shutdown
     await shutdown_event.wait()
     await self._shutdown_and_exit(_watchdog)
+
+
+# How often the gateway re-stats the governance profiles directory and re-derives
+# the on-disk auto-approvals when a saved profile has moved the governance answer.
+# Bounds how long a profile that withdraws an auto-approved tool can be bypassed by
+# a newly started session; an unchanged tick costs a directory stat.
+_PROFILE_PROJECTION_POLL_S = 15.0

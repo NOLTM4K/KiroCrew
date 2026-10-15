@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     import signal
 
     from kiro_crew.slack.gateway import (
-        _MARKER_WRITE_WAIT_SECS,
         GRACEFUL_SHUTDOWN_SECS,
         UPDATE_INSTALLER_STOP_SECS,
         Any,
@@ -535,3 +534,9 @@ async def _shutdown_and_exit(
     await flush_audit_queue_before_hard_exit()
     await drain_log_queue_before_hard_exit()
     os._exit(exit_code)
+
+
+# Budget for awaiting the in-flight run-marker write during shutdown. Bounded
+# so a stalled write can never eat into GRACEFUL_SHUTDOWN_SECS (which saves
+# active slots) — the marker is best-effort, the slot save is not.
+_MARKER_WRITE_WAIT_SECS = 5.0

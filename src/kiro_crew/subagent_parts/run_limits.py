@@ -237,8 +237,8 @@ _CANCEL_RESUME_PREFIX = (
 
 # Inner cap: max seconds for a single injected continuation turn
 # (stream_and_collect). When the last spawn_run subagent completes, the gateway
-# (slack/gateway.py `_subagent_done`) injects a continuation turn wrapped in
-# ``asyncio.wait_for(..., timeout=INJECTION_TIMEOUT)``. spawn_run-heavy crons
+# (`_subagent_done`, slack/gateway_runtime/subagent_wiring.py) injects a continuation
+# turn wrapped in ``asyncio.wait_for(..., timeout=INJECTION_TIMEOUT)``. spawn_run-heavy crons
 # doing their final synthesis / multi-file apply on that turn were cancelled at
 # the old hard 300s cap and the finally block reset the session mid-action.
 # Default raised to 900s and made tunable via ``KIROCREW_INJECTION_TIMEOUT``

@@ -351,6 +351,11 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
             "(self, launcher: 'str | None', exe: 'str | None') -> 'None'",
         ),
         ("_check_for_updates_legacy", "async method", "(self) -> 'None'"),
+        (
+            "_restart_after_update_body",
+            "async method",
+            "(self, respawn: 'Callable[[], str]') -> 'None'",
+        ),
     ),
     "update_apply": (
         ("_auto_apply_update", "async method", "(self, *, mandatory: 'bool' = False) -> 'None'"),
@@ -461,6 +466,7 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
         ("_init_dashboard", "async method", "(self) -> 'None'"),
         ("_init_api_server", "async method", "(self) -> 'None'"),
         ("run", "async method", "(self) -> 'None'"),
+        ("_PROFILE_PROJECTION_POLL_S", "value", "'float'"),
     ),
     "heartbeat_turns": (
         ("_init_heartbeat", "async method", "(self) -> 'None'"),
@@ -469,6 +475,7 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
             "async function",
             "(client: 'Any', session_key: 'str', *, provider: 'str', surface: 'str', agent_fallback: 'Callable[[], str]', t0: 'float', usage: 'AgentTurnUsage | None' = None) -> 'None'",
         ),
+        ("_HEARTBEAT_KEEP_INJECTION", "value", "'str'"),
     ),
     "result_egress": (
         (
@@ -500,6 +507,7 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
             "async method",
             "(self, watchdog: 'asyncio.Future | None' = None) -> 'None'",
         ),
+        ("_MARKER_WRITE_WAIT_SECS", "value", "'float'"),
     ),
     "process_entry": (
         ("_live_session_work_dirs", "function", "(sessions: 'Any') -> 'list[str]'"),
@@ -521,6 +529,8 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
             "async function",
             "(cfg: 'KiroCrewConfig', *, no_dashboard: 'bool' = False, no_crons: 'bool' = False, no_tunnel: 'bool' = False, no_open: 'bool' = False, port_override: 'str | None' = None, json_ready: 'bool' = False, approval_mode: 'str | None' = None, test_mode: 'bool' = False) -> 'None'",
         ),
+        ("BOOT_RESTART_HINT", "value", "'str'"),
+        ("_SIGNING_KEY_PREFLIGHT_TIMEOUT_SECS", "value", "'float'"),
     ),
     # The cron decomposition: _init_cron and the four failure-alert helpers keep their
     # BASE shapes; the other twelve are the phases cut out of _init_cron's closure.
@@ -542,6 +552,8 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
             "method",
             "(self, job: 'CronJob', key: 'str', agent: 'str | None') -> 'str | None'",
         ),
+        ("_announce_cron_quarantine", "method", "(self) -> 'None'"),
+        ("_start_cron_after_memory_ready", "async method", "(self) -> 'None'"),
     ),
     "cron_exec": (
         ("_cron_run_command", "async method", "(self, job: 'CronJob') -> 'str | None'"),
@@ -551,6 +563,7 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
             "(self, job: 'CronJob', message: 'str', *, remove: 'bool' = False) -> 'None'",
         ),
         ("_cron_run_script", "async method", "(self, job: 'CronJob') -> 'str | None'"),
+        ("_live_internal_secret", "method", "(self) -> 'str'"),
     ),
     "cron_turn": (
         (
@@ -570,6 +583,7 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
             "async method",
             "(self, job: 'CronJob', session_key: 'str', client: 'LLMProvider', result_text: 'str', rh: 'str', _ctx_reading: 'Any', _turn_stats: 'dict[str, Any] | None') -> 'str'",
         ),
+        ("_CRON_MSG_LIMIT", "value", "'int'"),
     ),
     "cron_failure": (
         (
@@ -597,6 +611,141 @@ _BASE_SURFACE: dict[str, tuple[tuple[str, str, str], ...]] = {
             "_cron_single_failure",
             "async method",
             "(self, job: 'CronJob', exc: 'Exception', session_key: 'str', _gate_counted: 'bool', _job_owns_failure: 'bool', _hand_over_streak: 'bool') -> 'None'",
+        ),
+    ),
+    "orchestrator_init": (
+        (
+            "__init__",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', *, no_dashboard: 'bool' = False, no_crons: 'bool' = False, no_open: 'bool' = False, port_override: 'str | None' = None, json_ready: 'bool' = False, approval_mode: 'str | None' = None, test_mode: 'bool' = False, credentials: 'Mapping[str, str] | None' = None) -> 'None'",
+        ),
+    ),
+    "subagent_wiring": (
+        (
+            "_subagent_work_pending",
+            "async function",
+            "(manager: 'Any', parent_session_key: 'str') -> 'bool'",
+        ),
+        (
+            "_subagent_queued_count",
+            "async function",
+            "(manager: 'Any', parent_session_key: 'str') -> 'int'",
+        ),
+        (
+            "_subagent_batch_pending",
+            "async function",
+            "(manager: 'Any', batch_id: 'str') -> 'bool'",
+        ),
+        ("_WORKFLOW_STEP_PREFIXES", "value", "'tuple'"),
+        ("_spawn_parent_slot", "function", "(parent_key: 'str', workflow_service: 'Any') -> 'str'"),
+        ("_subagent_coalescer", "method", "(self) -> \"'SubagentEventCoalescer'\""),
+        ("_init_subagents", "method", "(self) -> 'None'"),
+    ),
+    "subagent_report": (
+        ("_digest_chunk_size", "function", "() -> 'int'"),
+        ("SUBAGENT_DIGEST_CHUNK_SIZE", "value", "'int'"),
+        ("_SubagentReport", "class", ""),
+        ("_WaveDigest", "class", ""),
+        (
+            "_compose_subagent_completion",
+            "function",
+            "(info: 'SubagentInfo', *, _flush_only: 'bool') -> '_SubagentReport'",
+        ),
+        (
+            "_subagent_wave_digest",
+            "method",
+            "(self, info: 'SubagentInfo', *, report: '_SubagentReport', _flush_only: 'bool', _batch_id: 'str', _batch_total: 'int', _no_batch_pending: 'bool', _injection_slot_name: 'str') -> '_WaveDigest | None'",
+        ),
+    ),
+    "subagent_injection": (
+        ("_MAX_INJECT_ATTEMPTS", "value", "'int'"),
+        ("_injection_slot_busy", "function", "(slot: 'Any') -> 'bool'"),
+        (
+            "_defer_queued_delivery",
+            "staticmethod",
+            "(slot: 'Any', announce: 'str', info: 'SubagentInfo', *, flush_only: 'bool') -> 'None'",
+        ),
+        (
+            "_route_subagent_to_tab",
+            "async method",
+            "(self, info: 'SubagentInfo', *, announce: 'str', body: 'str', title: 'str', sub_meta: 'dict[str, Any]', _flush_only: 'bool', _injection_slot: 'Any', _injection_slot_name: 'str', parent_key: 'str') -> 'None'",
+        ),
+        (
+            "_inject_subagent_into_channel_parent",
+            "async method",
+            "(self, info: 'SubagentInfo', *, announce: 'str', body: 'str', title: 'str', parent_key: 'str') -> 'None'",
+        ),
+        (
+            "_finish_subagent_cron_or_notify",
+            "async method",
+            "(self, info: 'SubagentInfo', *, announce: 'str', body: 'str', title: 'str', parent_key: 'str') -> 'None'",
+        ),
+    ),
+    "runtime_charge": (
+        ("_apply_gate_verdict", "function", "(job: 'CronJob', tally: '_GateTally') -> 'bool'"),
+        (
+            "_cron_failure_attribution",
+            "function",
+            "(job: 'CronJob', _run_provider: 'object | None') -> 'tuple[bool, bool]'",
+        ),
+        ("_charge_failure", "function", "(job: 'CronJob', _hand_over_streak: 'bool') -> 'None'"),
+        (
+            "_inject_with_retry",
+            "async method",
+            "(self, info: 'SubagentInfo', client, msg: 'str', parent_key: 'str', label: 'str') -> 'str | None'",
+        ),
+    ),
+    "channel_boot": (
+        (
+            "_hoist_wecom",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        (
+            "_hoist_telegram",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        (
+            "_hoist_weixin",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        (
+            "_hoist_whatsapp",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        (
+            "_hoist_feishu",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        (
+            "_hoist_discord",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        (
+            "_hoist_webex",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        (
+            "_hoist_imessage",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        (
+            "_hoist_teams",
+            "method",
+            "(self, cfg: 'KiroCrewConfig', creds: 'Mapping[str, str]') -> 'None'",
+        ),
+        ("_register_config_appliers", "method", "(self) -> 'None'"),
+        (
+            "_start_channel_transports",
+            "async method",
+            "(self, descriptors: \"'tuple[ChannelDescriptor, ...] | None'\" = None) -> 'None'",
         ),
     ),
 }
@@ -1025,37 +1174,49 @@ _GUARDED_TOKEN_HOMES: dict[str, frozenset[str]] = {
     ".read_messages": frozenset({"cron_delivery", "nudge_wiring"}),
     "begin_turn": frozenset({"nudge_channel_fire"}),
     "os._exit": frozenset({"exit_path"}),
-    "save_conversation_turn_off_loop": frozenset({"gateway", "nudge_channel_fire"}),
-    "session_store_for_turn": frozenset({"gateway", "heartbeat_turns", "nudge_channel_fire"}),
+    "save_conversation_turn_off_loop": frozenset(
+        {"gateway", "nudge_channel_fire", "subagent_injection"}
+    ),
+    "session_store_for_turn": frozenset(
+        {"gateway", "heartbeat_turns", "nudge_channel_fire", "subagent_injection"}
+    ),
     "create_subprocess_": frozenset({"gateway", "install_repair", "update_apply"}),
     "isolated_python_argv": frozenset({"install_repair", "update_apply"}),
     "respawn_executable": frozenset({"update_apply", "update_schedule"}),
     "reexec_python_module": frozenset({"update_schedule"}),
     "_running_script_ids.add": frozenset({"cron_exec"}),
-    "caused_by_this_session": frozenset({"gateway"}),
-    "note_shared_death": frozenset({"gateway"}),
+    "caused_by_this_session": frozenset({"runtime_charge"}),
+    "note_shared_death": frozenset({"runtime_charge"}),
     "clear_marker": frozenset({"exit_path"}),
     "init_socket_mode": frozenset({"service_boot"}),
     "build_message": frozenset(
-        {"cron_fire", "cron_turn", "gateway", "heartbeat_turns", "nudge_channel_fire"}
+        {"cron_fire", "cron_turn", "heartbeat_turns", "nudge_channel_fire", "subagent_injection"}
     ),
     "VectorMemoryStore": frozenset({"gateway", "service_boot"}),
-    "configure_default_ladder": frozenset({"gateway"}),
+    "configure_default_ladder": frozenset({"subagent_wiring"}),
     "eventlog_hooks": frozenset({"exit_path", "nudge_wiring", "service_boot"}),
     "autonudge_state": frozenset({"nudge_wiring"}),
     "_run_chat": frozenset(
-        {"cron_exec", "cron_fire", "gateway", "nudge_dashboard_fire", "result_egress"}
+        {
+            "cron_exec",
+            "cron_fire",
+            "gateway",
+            "nudge_dashboard_fire",
+            "result_egress",
+            "subagent_injection",
+            "subagent_wiring",
+        }
     ),
     "spawn_guarded_turn": frozenset({"cron_exec", "gateway", "nudge_dashboard_fire"}),
     "compose_nudge_body": frozenset({"gateway", "nudge_channel_fire", "nudge_dashboard_fire"}),
-    "clear_shared_deaths": frozenset({"cron_exec", "gateway"}),
+    "clear_shared_deaths": frozenset({"cron_exec", "runtime_charge"}),
     "run_in_cron_pool(": frozenset({"cron_exec"}),
-    "consecutive_failures": frozenset({"cron_exec", "cron_failure", "cron_turn", "gateway"}),
-    "_delivery_queued": frozenset({"gateway"}),
-    "_digest_held": frozenset({"gateway"}),
+    "consecutive_failures": frozenset({"cron_exec", "cron_failure", "cron_turn", "runtime_charge"}),
+    "_delivery_queued": frozenset({"subagent_injection"}),
+    "_digest_held": frozenset({"subagent_report"}),
     "_deliver_failure_alert": frozenset({"cron_failure", "gateway"}),
     "render_for_slack(": frozenset(
-        {"cron_delivery", "gateway", "nudge_channel_fire", "result_egress"}
+        {"cron_delivery", "nudge_channel_fire", "result_egress", "subagent_injection"}
     ),
 }
 
@@ -1079,8 +1240,9 @@ def test_a_construct_a_guard_reads_stays_where_the_guard_reads_it(token: str) ->
 
 def test_no_owner_reads_a_hoisted_channel_attribute() -> None:
     """``test_channel_boot_hot_reload`` checks every ``_<channel>_*`` attribute read in
-    ``slack/gateway.py`` against that channel's hoist; the reads stay there, so no
-    owner holds one."""
+    ``slack/gateway.py``, ``orchestrator_init.py`` and ``channel_boot.py`` against that
+    channel's hoist; the reads stay there, so no other owner holds one."""
+    read_by_the_parity_test = {"orchestrator_init.py", "channel_boot.py"}
     channels = (
         "wecom",
         "telegram",
@@ -1095,6 +1257,7 @@ def test_no_owner_reads_a_hoisted_channel_attribute() -> None:
     offenders = [
         f"{name}:{node.lineno}:{node.attr}"
         for name, tree in _owner_trees()
+        if name not in read_by_the_parity_test
         for node in ast.walk(tree)
         if isinstance(node, ast.Attribute) and any(node.attr.startswith(f"_{c}_") for c in channels)
     ]

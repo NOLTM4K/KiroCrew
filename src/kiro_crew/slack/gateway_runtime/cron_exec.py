@@ -2,10 +2,11 @@
 
 Both arms hold the overlap guard for their run and release it in one ``finally``,
 after abandoning the claim hand-off; both pass the fire-time governance gate and the
-claim-time re-vet, and record the run's verdict on the job.
+claim-time re-vet, and record the run's verdict on the job. A script's
+``notify()`` authenticates with the live dashboard's internal secret.
 
-Orchestrator fields read: ``_running_script_ids``, ``cron_svc``, ``dashboard_state``,
-``sessions``.
+Orchestrator fields read: ``_dashboard_runner``, ``_running_script_ids``, ``cron_svc``,
+``dashboard_state``, ``sessions``.
 Orchestrator fields written: none.
 
 Composed by :mod:`kiro_crew.slack.gateway`, whose globals its functions run on;
@@ -309,8 +310,8 @@ async def _cron_run_command(self: GatewayOrchestrator, job: CronJob) -> str | No
         # job defect, and counting it auto-pauses at
         # _AUTO_PAUSE_THRESHOLD -- a paused job never fires again, so
         # repeated wedged wakes would permanently disable a healthy
-        # job and leave its work unscheduled. ``cron.py``'s
-        # _execute_with_timeout guard already refuses to count a
+        # job and leave its work unscheduled.
+        # ``CronService._execute_with_timeout``'s guard already refuses to count a
         # never-started run, but this arm calls record_failure()
         # DIRECTLY and so never reaches it. A genuine overrun (the
         # payload started, then ran long) still counts, which is what
@@ -907,3 +908,28 @@ async def _cron_run_script(self: GatewayOrchestrator, job: CronJob) -> str | Non
         # nothing observed here.
         handoff.abandon()
         self._running_script_ids.discard(job.id)
+
+
+def _live_internal_secret(self: GatewayOrchestrator) -> str:
+    """This gateway's LIVE internal-API secret, for script-cron ``notify()``.
+
+    The dashboard mints the secret at startup and the auth middleware
+    compares against that same in-memory value (``app["local_secret"]``).
+    A script cron's child authenticates ``/api/send-message`` with the
+    secret it is handed at spawn, so the in-process scheduler hands it THIS
+    value rather than one re-derived from the environment or a per-port
+    file — a stale ``KIROCREW_INTERNAL_SECRET`` or ``.secret`` file
+    otherwise wins the derivation and 403s every ``notify()``.
+
+    Returns ``""`` when no dashboard has started (``--no-dashboard`` /
+    API-only), so ``run_script_sandboxed`` falls back to env/file
+    derivation. Read-only and in-process only: the value is never logged or
+    returned over HTTP.
+    """
+    runner = self._dashboard_runner
+    if runner is None:
+        return ""
+    try:
+        return runner.app.get("local_secret", "") or ""
+    except Exception:
+        return ""

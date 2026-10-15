@@ -5,7 +5,9 @@ runs a crewmate's goal reminder, captures what the fire needs, checks the overla
 guard, and dispatches: the command and script arms, the message job's fire-time gate
 and first-run tab, then the agent sequence or the single-agent turn. This module
 also owns what a fire needs before its turn runs: the capture, resolving a crew alias
-to the agent it dispatches, and acquiring the session that agent runs in.
+to the agent it dispatches, and acquiring the session that agent runs in; and
+arming the scheduler once memory is ready, and saying when startup moved an
+unreadable cron store aside.
 
 Orchestrator fields read: ``_cfg``, ``_no_crons``, ``_running_script_ids``,
 ``ctx_builder``, ``dashboard_state``, ``sessions``.
@@ -318,7 +320,7 @@ async def _cron_capture(self: GatewayOrchestrator, job: CronJob) -> _CronCapture
     # "kirocrew" floor instead of failing the dispatch.
     _default_agent = ""
     # True once the dispatched agent came from ``agent.default_agent``.
-    # That field is the TEMPLATE namespace (config/sections.py, free-form
+    # That field is the TEMPLATE namespace (config/sections_agent.py, free-form
     # str, no alias validation) -- unlike the alias-namespaced default,
     # which has its own `default_agent_not_alias` guard. The collapse in
     # _resolve_cron_agent treats ANY name that keys ``cfg.agents`` as a
@@ -563,7 +565,7 @@ def _resolve_cron_agent(
     # A template-namespace name is NOT a crew alias, even when it
     # happens to key ``cfg.agents``. ``agent.default_agent`` is a
     # free-form str in the template namespace with no alias
-    # validation (config/sections.py), so an operator naming a crew
+    # validation (config/sections_agent.py), so an operator naming a crew
     # member there is ordinary input -- and the collapse below keys
     # only on membership in ``cfg.agents``, then returns the alias as
     # ``crew_agent``, which ``resolve_crew_identity`` honours
@@ -843,3 +845,36 @@ def _retained_session_agent_mismatch(
     if isinstance(live_agent, str) and live_agent and live_agent != (agent or ""):
         return live_agent
     return None
+
+
+def _announce_cron_quarantine(self: GatewayOrchestrator) -> None:
+    """Tell the dashboard that startup moved an unreadable cron store aside."""
+    moved = getattr(self, "_cron_quarantine", None)
+    if moved is None or self.dashboard_state is None:
+        return
+    self.dashboard_state.notify(
+        "cron",
+        "Scheduled tasks could not be read",
+        "The schedule file was not a readable schedule (invalid JSON, or no jobs "
+        f"list), so Kiro Crew moved it to {moved} and started with no scheduled "
+        "tasks. Nothing was deleted. To restore: fix that copy, stop Kiro Crew, "
+        f"move it back to {data_home() / 'crons.json'}, and start again. "
+        "`kirocrew doctor` shows the same steps.",
+    )
+
+
+async def _start_cron_after_memory_ready(self: GatewayOrchestrator) -> None:
+    """Arm overdue jobs only after the memory preparation fence completes."""
+    if self._no_crons or self.cron_svc is None or not self._cron_reconciled:
+        return
+    if self._cron_armed:
+        return
+    startup = getattr(self, "_memory_startup", None)
+    if startup is not None and (startup.stopped or not startup.ready):
+        raise RuntimeError("Cron scheduler cannot start before memory preparation completes")
+    await self.cron_svc.start()
+    self._cron_armed = True
+    if self.sessions:
+        self.cron_svc.start_reaper(self.sessions)
+    else:
+        logger.warning("Cron reaper not started: sessions not available")

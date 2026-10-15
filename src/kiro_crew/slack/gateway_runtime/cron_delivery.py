@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     import time
 
     from kiro_crew.slack.gateway import (
-        _CRON_MSG_LIMIT,
         _SUCCESS_REMINDER_SECS,
         Any,
         CronJob,
@@ -371,3 +370,8 @@ async def _deliver_cron_agent_result(
                     meta={"job_id": job.id},
                 )
     return result_text
+
+
+# Slack Block Kit section.text hard limit is 3000 chars.
+# We split cron output at this boundary so each chunk fits in a section block.
+_CRON_MSG_LIMIT = 3000

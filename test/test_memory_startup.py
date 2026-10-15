@@ -213,7 +213,22 @@ def test_the_crew_log_child_liveness_probe_is_registered_after_ready():
     dashboard_workers = source.index("self._start_dashboard_workers_after_memory_ready()")
     assert ready < register < dashboard_workers
 
-    boot = inspect.getsource(GatewayOrchestrator._init_subagents)
+    # ``_init_subagents`` and the completion consumer's phases it calls, which the
+    # facade composes from its sub-agent owners.
+    from kiro_crew.slack.gateway import _compose_subagent_completion
+
+    boot = "\n".join(
+        inspect.getsource(fn)
+        for fn in (
+            GatewayOrchestrator._init_subagents,
+            _compose_subagent_completion,
+            GatewayOrchestrator._subagent_wave_digest,
+            GatewayOrchestrator._route_subagent_to_tab,
+            GatewayOrchestrator._inject_subagent_into_channel_parent,
+            GatewayOrchestrator._finish_subagent_cron_or_notify,
+            GatewayOrchestrator._inject_with_retry,
+        )
+    )
     assert "crew_log_emit" not in boot, (
         "the emitter import belongs off the boot path: _init_subagents is an "
         "_init_* reached from run() before the readiness print"

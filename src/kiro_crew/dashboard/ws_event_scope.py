@@ -240,9 +240,10 @@ _SLOT_SCOPED_EVENTS = frozenset({
     "approval", "approval_resolved", "question_card",
     # Subagent lifecycle. Every one of these is fired through
     # ``SubagentManager._fire_event`` and reaches the wire via
-    # ``broadcast_ws(etype, ...)`` with a VARIABLE etype (slack/gateway.py's
-    # ``_subagent_event``), so a guard that scans broadcast call sites for string
-    # literals cannot see them -- ``TestFireEventNamesAreClassified`` reads the
+    # ``broadcast_ws(etype, ...)`` with a VARIABLE etype (the ``_subagent_event``
+    # closure in slack/gateway_runtime/subagent_wiring.py), so a guard that scans
+    # broadcast call sites for string literals cannot see them --
+    # ``TestFireEventNamesAreClassified`` reads the
     # emitter's own literals instead. Each payload carries id + slot.
     "subagent_spawn", "subagent_done", "subagent_tool", "subagent_chunk",
     "subagent_snapshot", "subagent_status", "subagent_queued",

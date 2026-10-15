@@ -11,8 +11,8 @@ The delivery legs that render or redact a result before it leaves the process li
 in ``result_egress.py`` (``_deliver_channel_reply``, ``_deliver_cron_response``,
 ``_deliver_result`` with the heartbeat Slack rendering), the cron agent result's
 in ``cron_delivery.py`` and the failure alerts in ``cron_failure.py``:
-``security_posture`` names ``slack/gateway.py`` as the sink for cron and
-notification posts and lists the redacting owners composed into it.
+``security_posture`` names ``subagent_injection.py`` as the sink for cron and
+notification posts and lists the other redacting owners composed into the facade.
 
 Composed by :mod:`kiro_crew.slack.gateway`, whose globals its functions run on;
 see :mod:`kiro_crew.slack.gateway_runtime`.

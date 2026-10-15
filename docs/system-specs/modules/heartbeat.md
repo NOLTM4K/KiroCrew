@@ -121,7 +121,7 @@ Each task's prompt is built without a session key, but the record of skill bodie
 
 ### HEARTBEAT_KEEP Injection
 
-Every heartbeat task text is prepended with a fixed instruction at the gateway (`_HEARTBEAT_KEEP_INJECTION` in `slack/gateway.py`) before `ctx_builder.build_message`. The instruction tells the agent it must include `HEARTBEAT_KEEP` in its response when the task is incomplete. Inline injection survives context compaction and webhook-restored sessions where skill / system-prompt copies of the same instruction can drift out of effective context.
+Every heartbeat task text is prepended with a fixed instruction at the gateway (`_HEARTBEAT_KEEP_INJECTION` in `slack/gateway_runtime/heartbeat_turns.py`) before `ctx_builder.build_message`. The instruction tells the agent it must include `HEARTBEAT_KEEP` in its response when the task is incomplete. Inline injection survives context compaction and webhook-restored sessions where skill / system-prompt copies of the same instruction can drift out of effective context.
 
 ### Tool Approval (heartbeat allowlist)
 
@@ -150,7 +150,7 @@ When a legitimate new read tool needs to run in heartbeat, operators observe SEL
 | `HEARTBEAT_FILE` | `HEARTBEAT.md` | `heartbeat.py` |
 | `HEARTBEAT_KEY` | `_hb` | `session.py` |
 | `_HEARTBEAT_SAFE_CORE_MCP_TOOLS` | frozenset of `kirocrew-core` reads | `slack/gateway_runtime/tool_policy.py` |
-| `_HEARTBEAT_KEEP_INJECTION` | reminder string | `slack/gateway.py` |
+| `_HEARTBEAT_KEEP_INJECTION` | reminder string | `slack/gateway_runtime/heartbeat_turns.py` |
 | `kirocrew-heartbeat` agent | minimal-MCP agent JSON | installed by `agent.py:_install_heartbeat_agent` |
 
 ## Known Limitations

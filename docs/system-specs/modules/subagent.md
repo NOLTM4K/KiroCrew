@@ -161,7 +161,7 @@ so) and re-exported by `kiro_crew.subagent`, which stays the place to read and p
 | `_SHARED_START_SAVING_GB` | 0.35 | What a start that shares its parent's runtime does not launch (the kiro-cli process and its first-session warm-up, measured); a shared start is priced at the dedicated projection less this, never below `_SHARED_START_MIN_GB` (0.05). See *Memory guard* |
 | `_RSS_SAMPLES_TO_SETTLE` | 2 | Sweeps before a dedicated worker counts as settled and owes nothing |
 | `_DEDICATED_TOPUP_WAIT_SECS` | 60 | Longest a start admitted at the shared price waits for the floor before launching a dedicated process anyway (polls every `_DEDICATED_TOPUP_POLL_SECS`, 2 s) |
-| `_ON_DONE_TIMEOUT` | 1200 | Outer cap (`subagent._ON_DONE_TIMEOUT`): max total seconds for semaphore wait + injection (20 minutes), enforced by `asyncio.wait_for` around `_on_done` in `subagent_manager/terminal.py`. Inside it, a channel or no-tab parent gets up to `_MAX_INJECT_ATTEMPTS` (2, `slack/gateway.py`) injection attempts, the second only after a timeout, before the failure is queued |
+| `_ON_DONE_TIMEOUT` | 1200 | Outer cap (`subagent._ON_DONE_TIMEOUT`): max total seconds for semaphore wait + injection (20 minutes), enforced by `asyncio.wait_for` around `_on_done` in `subagent_manager/terminal.py`. Inside it, a channel or no-tab parent gets up to `_MAX_INJECT_ATTEMPTS` (2, `slack/gateway_runtime/subagent_injection.py`) injection attempts, the second only after a timeout, before the failure is queued |
 | `INJECTION_TIMEOUT` | 900 | Inner cap: max seconds for a single `stream_and_collect` call (15 minutes); default `_DEFAULT_INJECTION_TIMEOUT = 900.0`, tunable via `KIROCREW_INJECTION_TIMEOUT` (float seconds, clamped to `_ON_DONE_TIMEOUT`) |
 | `_RESET_TIMEOUT` | 30 | Max seconds for session reset in finally block |
 | `_TURN_LIMIT` | 1000 | Default tool-call budget per subagent, from `constants.DEFAULT_SUBAGENT_MAX_TURNS` (configurable via `agent.subagent_max_turns`, per-spawn via `max_turns`) |
@@ -1473,7 +1473,7 @@ Spawn flow (`subagent_manager/admission/gate.py`), first matching rung wins:
 6. **Otherwise**: rejected with `spawn rejected: no approval mechanism configured`.
 
 **Channel-side approval delivery (issue #2381 item 1).** The single host-wide
-`on_spawn_approval` callback (built in `slack/gateway.py`) consults a
+`on_spawn_approval` callback (built in `slack/gateway_runtime/subagent_wiring.py`) consults a
 channel-neutral delivery seam (`messaging/spawn_approval_delivery.py`) FIRST,
 given the spawn's `parent_session_key`. A channel dispatcher registers a delivery
 hook keyed by its channel namespace (`register_channel_delivery("telegram", …)`);
@@ -1683,9 +1683,11 @@ work and is returned for cancellation.
 
 "Has the outcome reached the parent" is asked through `delivery_is_parked`, which reads
 one declared table, `DELIVERY_ROUTING_FIELDS`. The table is enumerated from the PRODUCING
-side: every `SubagentInfo` attribute written by the four modules that own terminal-outcome
+side: every `SubagentInfo` attribute written by the modules that own terminal-outcome
 routing (`subagent_manager/terminal.py`, `subagent_manager/waves.py`,
-`subagent_manager/cancellation.py`, `slack/gateway.py`), classified as `PARKS_WHEN_SET`,
+`subagent_manager/cancellation.py`, and the gateway's completion consumer in
+`slack/gateway_runtime/subagent_wiring.py`, `subagent_report.py`,
+`subagent_injection.py` and `runtime_charge.py`), classified as `PARKS_WHEN_SET`,
 `PARKS_WHEN_UNSET` or `NOT_DELIVERY_STATE`.
 
 That direction matters because the question has five representations, not one, and reading
@@ -2382,7 +2384,7 @@ An unmarked `CancelledError` (see intentional-cancel rule) triggers `_schedule_c
 - **A synthesized reap error names only the cause the observed state supports.** The wall clock fires at the configured deadline, but a run parked on a never-answered spawn approval has reached no execution deadline: `turns == 0`, `_pid is None`, `_exec_started is None`, and the dashboard's approval window is still open. So `_force_reap`'s error synthesis tests `_awaiting_approval and _exec_started is None` **first** and reports the unanswered spawn approval, before the `startup_timeout` and generic-deadline arms. The predicate is captured **above** the intentional cancel, because the flag's owner clears it in a `finally` the cancel schedules; reading it at the record site would hold only while no `await` sits in between.
 - `_sigkill_session(session_key, handle)`: best-effort SIGKILL when graceful reset hangs or did not end the process; acts on one pre-reset handle only (`_sigkill_sessions` runs it per candidate and joins the failures), returns the failure it hit instead of swallowing it (contract in the `_force_reap` bullet above). It releases the run's own lease first, then passes the runtime-ownership gate (`authorize_runtime_kill`) and the teardown barrier ([runtime ownership](runtime-ownership.md)); a gate refusal (another session's lease or a tenancy) or a barrier refusal (a tenant arrived after the gate allowed) sends no signal and is returned as a kill failure, so the record never says the run was reaped
 - After decrementing `_running_count`, `_force_reap` calls `_drain_queue()` so the freed slot immediately starts a queued spawn. Normal completion pumps the queue via its `finally` block, but that block is gated on `not info.reaped`; a reap sets `reaped=True` and decrements the count itself, so without this explicit drain a queued spawn would sit stranded until an unrelated agent finished or a new spawn arrived.
-- Wired up in `slack/gateway.py` after `SubagentManager` init
+- Wired up in `slack/gateway_runtime/subagent_wiring.py` after `SubagentManager` init
 
 ### Idle-Stall Detection
 
@@ -2480,7 +2482,7 @@ display context before it enters the broadcast digest text.
 ## Completion Injection
 
 Subagent results are routed back to the **originating session** via
-`_subagent_done` in `slack/gateway.py`. The `parent_session_key` on `SubagentInfo`
+`_subagent_done` in `slack/gateway_runtime/subagent_wiring.py`. The `parent_session_key` on `SubagentInfo`
 tracks which session spawned the subagent.
 
 ### Two-Level Timeout
@@ -2488,7 +2490,7 @@ tracks which session spawned the subagent.
 | Timeout | Location | Duration | Scope |
 |---|---|---|---|
 | Outer cap | `subagent.py _run()` | 1200s (20 min) | Semaphore wait + injection combined |
-| Inner cap | `slack/gateway.py _subagent_done()` | 900s (`INJECTION_TIMEOUT`, tunable via `KIROCREW_INJECTION_TIMEOUT`) | Single `stream_and_collect` call |
+| Inner cap | `slack/gateway_runtime/subagent_injection.py` (the channel and cron injections) | 900s (`INJECTION_TIMEOUT`, tunable via `KIROCREW_INJECTION_TIMEOUT`) | Single `stream_and_collect` call |
 
 On timeout (inner or outer):
 1. Kill stuck kiro-cli process via `sessions.reset()`
@@ -2498,7 +2500,7 @@ On timeout (inner or outer):
 
 ### Prompt-Busy Recovery
 
-`_inject_with_retry()` in `slack/gateway.py` makes up to 3 attempts (1 initial + 2 retries) of `stream_and_collect` on AcpError. Between retries: cancels orphaned prompt, exponential backoff. On `PromptBusyExhaustedError` or `AcpProcessDied`: resets the parent session only when `runtime_death.caused_by_this_session(client)` says the death was the parent's own runtime; on a shared runtime the parent is left to re-acquire on its next turn, so co-tenant sessions survive a death they did not cause. Either way the failure event is queued (`notify_injection_failed`). Note: the 1200s outer cap (`_ON_DONE_TIMEOUT`) bounds total wall-clock time, so not all retries may fire if earlier attempts consume the budget.
+`_inject_with_retry()` in `slack/gateway_runtime/runtime_charge.py` makes up to 3 attempts (1 initial + 2 retries) of `stream_and_collect` on AcpError. Between retries: cancels orphaned prompt, exponential backoff. On `PromptBusyExhaustedError` or `AcpProcessDied`: resets the parent session only when `runtime_death.caused_by_this_session(client)` says the death was the parent's own runtime; on a shared runtime the parent is left to re-acquire on its next turn, so co-tenant sessions survive a death they did not cause. Either way the failure event is queued (`notify_injection_failed`). Note: the 1200s outer cap (`_ON_DONE_TIMEOUT`) bounds total wall-clock time, so not all retries may fire if earlier attempts consume the budget.
 
 **Reconnect recovery**: `subscribe_subagents` in `ws.py` restores both managed and native subagent cards. Managed subagents are authoritative in `SubagentManager` while the gateway that ran them is alive: running records replay as `subagent_snapshot`, and recently completed records replay as `subagent_done`, including terminal `elapsed` and cumulative `credits`. Managed results remain disk-backed and are not copied into inline Redux card payloads.
 
@@ -3430,7 +3432,7 @@ inside the manager.
 |---|---|
 | `dashboard/handlers/messaging.py::parent_work_supported`, `dashboard/messaging_api/spawn.py::api_spawn` | Resolves the actual parent slot and reports delivery capability in the receipt. |
 | `subagent_manager/admission`, `subagent_persistence.py` | Existing capacity/queue/depth/cleanup rules remain authoritative; delegation metadata follows the run. |
-| `slack/gateway.py::_subagent_done` | Busy dashboard turns are awaited through `asyncio.shield`, then completion is injected or queued; the parent edit is not interrupted. Delivery retention starts on consumption. |
+| `slack/gateway_runtime/subagent_injection.py::_route_subagent_to_tab` | Busy dashboard turns are awaited through `asyncio.shield`, then completion is injected or queued; the parent edit is not interrupted. Delivery retention starts on consumption. |
 
 The existing full-batch barrier remains: collect all terminal outcomes before
 new dispatch. A failed/cancelled child is terminal for the barrier, not a
@@ -4001,7 +4003,7 @@ dashboard PATCH endpoint enforces the same enum via
 `_EDITABLE_CONFIG["agent.completion_keep"]`.
 
 The values are threaded into `SubagentManager.__init__` from
-`slack/gateway.py` (`completion_keep=`, `completion_keep_chars=` constructor
+`slack/gateway_runtime/subagent_wiring.py` (`completion_keep=`, `completion_keep_chars=` constructor
 kwargs sourced from `cfg.agent.*`), and a later write to either field is
 adopted live by `reconfigure` through `update_completion_keep`. User-facing docs:
 [`src/kiro_crew/docs/configuration.md`](../../../src/kiro_crew/docs/configuration.md),

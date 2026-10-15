@@ -5,8 +5,9 @@ The gateway is split by responsibility across the modules of this package, and
 nothing but the facade imports an owner.
 
 Each owner holds the gateway's functions and classes, moved verbatim or, for the cron
-callback, cut out of its closure with only re-plumbing edits (closure inputs become
-parameters, calls to former closures become ``self.`` calls); the list is in
+callback and the sub-agent completion consumer, cut out of their closures with only
+re-plumbing edits (closure inputs become parameters, calls to former closures become
+``self.`` calls); the list is in
 ``docs/system-specs/modules/slack-gateway.md`` (Composition).
 A function whose first parameter is ``self`` is an orchestrator method: the facade
 binds it as the ``GatewayOrchestrator`` attribute of the same name, so every call

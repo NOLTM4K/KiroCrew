@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     import threading
 
     from kiro_crew.slack.gateway import (
-        _SIGNING_KEY_PREFLIGHT_TIMEOUT_SECS,
-        BOOT_RESTART_HINT,
         Any,
         GatewayOrchestrator,
         KiroCrewConfig,
@@ -494,3 +492,14 @@ async def run_gateway(
         # Includes failures before READY, when the restore worker was never
         # scheduled. Release only this gateway's latch after closing its handle.
         await asyncio.to_thread(orchestrator._stop_memory_startup)
+
+
+# Restart step named by the boot refusal. Deliberately static: probing for the
+# installed service would stat HOME, which may be a hung network mount.
+BOOT_RESTART_HINT = "kirocrew restart"
+
+
+# Boot deadline for the signing-key preflight. Its lstat and key load normally
+# take milliseconds (the loader's own retry budget is well under a second), so a
+# preflight still running at this point is stuck on the filesystem.
+_SIGNING_KEY_PREFLIGHT_TIMEOUT_SECS = 30.0

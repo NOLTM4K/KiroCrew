@@ -1268,10 +1268,12 @@ class SpawnApprovalCallback(Protocol):
 
 # ── Delivery routing state: enumerated from the PRODUCING side ────────────────
 #
-# Every ``SubagentInfo`` attribute that the four modules owning terminal-outcome
-# routing WRITE -- ``subagent_manager/terminal.py``, ``subagent_manager/waves.py``,
-# ``subagent_manager/cancellation.py`` and ``slack/gateway.py`` -- classified by what it
-# says about whether the outcome has reached the parent.
+# Every ``SubagentInfo`` attribute that the modules owning terminal-outcome routing
+# WRITE -- ``subagent_manager/terminal.py``, ``subagent_manager/waves.py``,
+# ``subagent_manager/cancellation.py`` and the gateway's completion consumer
+# (``slack/gateway_runtime/subagent_wiring.py``, ``subagent_report.py``,
+# ``subagent_injection.py`` and ``runtime_charge.py``) -- classified by what it says
+# about whether the outcome has reached the parent.
 #
 # The list exists because "has this run's outcome reached its parent" has more than one
 # representation, and reading only the obvious one was wrong four separate times. A
@@ -1365,7 +1367,10 @@ DELIVERY_ROUTING_MODULES: tuple[str, ...] = (
     "subagent_manager/terminal.py",
     "subagent_manager/waves.py",
     "subagent_manager/cancellation.py",
-    "slack/gateway.py",
+    "slack/gateway_runtime/subagent_wiring.py",
+    "slack/gateway_runtime/subagent_report.py",
+    "slack/gateway_runtime/subagent_injection.py",
+    "slack/gateway_runtime/runtime_charge.py",
 )
 
 

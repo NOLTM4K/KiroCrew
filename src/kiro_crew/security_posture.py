@@ -925,7 +925,7 @@ _REDACTION_SINKS: tuple[tuple[str, str, str], ...] = (
     ),
     (
         "Slack cron / notification posts",
-        "slack/gateway.py",
+        "slack/gateway_runtime/subagent_injection.py",
         "Job names, cron results, and error strings before they reach a channel.",
     ),
     (
@@ -2500,10 +2500,12 @@ NON_EGRESS_REDACTION_MODULES: frozenset[str] = frozenset(
         # The owners composed into slack/gateway.py, in the same class as that
         # facade: they redact the install-repair, update and boot logs, the
         # AutoNudge notices, the nudge and heartbeat turns' posted replies, the
-        # approval prompts, the cron runs' results and failure alerts and the
-        # unattended results they deliver, and slack/gateway.py stays the
-        # registered "Slack cron / notification posts" sink for all of it, so the
-        # split adds no egress path of its own.
+        # approval prompts, the cron runs' results and failure alerts, the
+        # sub-agent completions they report, and the unattended results they
+        # deliver. The registered "Slack cron / notification posts" sink is the
+        # composed sub-agent injection owner, which holds that row's redaction;
+        # these share its process and namespace, so the split adds no egress path
+        # of its own.
         "slack/gateway_runtime/cron_delivery.py",
         "slack/gateway_runtime/cron_exec.py",
         "slack/gateway_runtime/cron_failure.py",
@@ -2514,6 +2516,8 @@ NON_EGRESS_REDACTION_MODULES: frozenset[str] = frozenset(
         "slack/gateway_runtime/nudge_wiring.py",
         "slack/gateway_runtime/result_egress.py",
         "slack/gateway_runtime/service_boot.py",
+        "slack/gateway_runtime/subagent_report.py",
+        "slack/gateway_runtime/subagent_wiring.py",
         "slack/gateway_runtime/turn_approvals.py",
         "slack/gateway_runtime/update_apply.py",
         "slack/gateway_runtime/update_schedule.py",

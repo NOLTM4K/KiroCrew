@@ -73,7 +73,7 @@ that the resulting agent action finished.
 
 ## Sub-agent completion
 
-A background sub-agent finished. `slack/gateway.py` builds the envelope on the
+A background sub-agent finished. `slack/gateway_runtime/subagent_report.py` builds the envelope on the
 single completion path that serves every terminal outcome:
 
 ```

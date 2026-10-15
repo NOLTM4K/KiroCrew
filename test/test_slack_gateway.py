@@ -10816,18 +10816,25 @@ def _gateway_class() -> ast.ClassDef:
     )
 
 
+def _gateway_defs() -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """The orchestrator's methods: the facade class body's, then the module-level
+    functions of the ``gateway_runtime`` owners the facade binds onto the class."""
+    defs = [
+        node
+        for node in _gateway_class().body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    for path in sorted((Path(gw.__file__).parent / "gateway_runtime").glob("*.py")):
+        defs += [
+            node
+            for node in ast.parse(path.read_text(encoding="utf-8")).body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+    return defs
+
+
 def _gateway_method(name: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    tree = ast.parse(Path(gw.__file__).read_text(encoding="utf-8"))
-    gateway_class = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "GatewayOrchestrator"
-    )
-    return next(
-        node
-        for node in gateway_class.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
-    )
+    return next(node for node in _gateway_defs() if node.name == name)
 
 
 def _collapsed_enabled_operands() -> dict[str, set[str]]:
@@ -10839,12 +10846,10 @@ def _collapsed_enabled_operands() -> dict[str, set[str]]:
     would pass vacuously.
     """
     found: dict[str, set[str]] = {}
-    gateway_class = _gateway_class()
     methods = [
         node
-        for node in gateway_class.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and (node.name == "__init__" or node.name.startswith("_hoist_"))
+        for node in _gateway_defs()
+        if node.name == "__init__" or node.name.startswith("_hoist_")
     ]
     assert methods, "no __init__ / _hoist_* methods found on the orchestrator"
     for method in methods:

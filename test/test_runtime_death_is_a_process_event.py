@@ -363,7 +363,7 @@ _SRC = Path(__file__).resolve().parents[1] / "src" / "kiro_crew"
 _GUARDED_CHARGES = [
     ("dashboard/chat_runner.py", "_acp_pipe_death_retries", 3),
     ("slack/handler.py", "record_failure", 1),
-    ("slack/gateway.py", "reset", 2),
+    ("slack/gateway_runtime/runtime_charge.py", "reset", 2),
     ("task_executor.py", "recoveries", 1),
 ]
 
@@ -1064,21 +1064,22 @@ def test_the_subagent_death_arms_guard_their_parent_reset():
     ``reset(parent_key)`` there tears down a healthy parent conversation, and
     every co-tenant session with it, over a child that failed.
     """
-    tree = ast.parse((_SRC / "slack" / "gateway.py").read_text(encoding="utf-8"))
-    unguarded: list[int] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        if not (isinstance(func, ast.Attribute) and func.attr == "reset"):
-            continue
-        if not any(isinstance(a, ast.Name) and a.id == "parent_key" for a in node.args):
-            continue
-        handler = _enclosing_death_handler(tree, node)
-        if handler is None:
-            continue
-        if "caused_by_this_session" not in _guard_names_in_ancestors(tree, node):
-            unguarded.append(node.lineno)
+    unguarded: list[tuple[str, int]] = []
+    for path in _GATEWAY_UNIT:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not (isinstance(func, ast.Attribute) and func.attr == "reset"):
+                continue
+            if not any(isinstance(a, ast.Name) and a.id == "parent_key" for a in node.args):
+                continue
+            handler = _enclosing_death_handler(tree, node)
+            if handler is None:
+                continue
+            if "caused_by_this_session" not in _guard_names_in_ancestors(tree, node):
+                unguarded.append((path.name, node.lineno))
     assert not unguarded, f"parent reset on a death arm with no ownership guard: lines {unguarded}"
 
 
@@ -1179,7 +1180,7 @@ def test_an_attribution_flag_is_bound_on_every_path_that_reads_it():
         Path("dashboard") / "chat_runner.py",
         Path("task_executor.py"),
         Path("slack") / "handler.py",
-        Path("slack") / "gateway.py",
+        *_GATEWAY_UNIT,
     ):
         path = _SRC / rel
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -1439,7 +1440,9 @@ def test_a_substitute_bound_hands_over_at_its_limit_rather_than_charging_once():
             "resetting, which needs the threshold a second time"
         )
 
-    gateway = ast.parse((_SRC / "slack" / "gateway.py").read_text(encoding="utf-8"))
+    gateway = ast.parse(
+        (_SRC / "slack" / "gateway_runtime" / "runtime_charge.py").read_text(encoding="utf-8")
+    )
     # The move is THREE steps -- raise the counter, forget the transferred streak,
     # charge the failure -- and it must be indivisible. `cancel()` is a plain
     # task.cancel() that charges nothing on its way out, so an await between the
@@ -1544,7 +1547,7 @@ def test_a_hand_over_forgets_the_streak_it_transferred():
     sites = {
         "slack/handler.py": ("reset", None),
         "messaging/dispatch.py": ("reset", None),
-        "slack/gateway.py": (None, "consecutive_failures"),
+        "slack/gateway_runtime/runtime_charge.py": (None, "consecutive_failures"),
     }
     for rel, (actuator_call, actuator_attr) in sites.items():
         tree = ast.parse((_SRC / Path(rel)).read_text(encoding="utf-8"))

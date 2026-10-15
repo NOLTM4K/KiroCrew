@@ -159,7 +159,7 @@ Slack Socket Mode → events.py (dispatch) → handler.py → SessionManager →
 | `slack/format.py` | Markdown → Slack mrkdwn conversion (headings, links, strike, tables, mermaid, ANSI strip, truncation). `render_for_slack` is the one way text reaches Slack: `strip_ansi` → redact → pre-split → convert → redact → display-settle → redact → split, with each converted block, split piece and truncation settled under the Slack mrkdwn reading |
 | `slack/handler.py` | The native turn path's composition facade: `handle_message()` — orchestrates one turn and streams the ACP response, `handle_interaction()` — button clicks (with None provider guard), and every name the module exported. See [Native handler composition](#native-handler-composition) |
 | `slack/handler_runtime/` | Private owners the handler facade composes, one responsibility each (see [Native handler composition](#native-handler-composition)); nothing else imports them |
-| `slack/gateway.py` | `GatewayOrchestrator` — the composition facade: construction (`__init__`), the subagent callbacks and the per-channel hoists; the class binds the methods its owners define. Entry point: `run_gateway()`, defined in `gateway_runtime/process_entry.py` and importable from here. See [Composition](#composition) |
+| `slack/gateway.py` | `GatewayOrchestrator` — the composition facade: the class declares the orchestrator's fields and binds the methods its owners define. Entry point: `run_gateway()`, defined in `gateway_runtime/process_entry.py` and importable from here. See [Composition](#composition) |
 | `slack/gateway_runtime/` | Private owners the facade composes, one responsibility each (see [Composition](#composition)); nothing else imports them |
 | `slack/events.py` | Socket Mode event routing — dedup (`SeenCache`), slash commands, `member_joined_channel` tracking, message dispatch |
 | `slack/interactions.py` | Block Kit button routing — tool approval, OPTIONS choices, cron/subagent ack, session resume, track channel approve/deny |
@@ -195,7 +195,7 @@ there; the responsibilities below live in private owners under
 | `slack/gateway_runtime/memory_lifecycle.py` | Memory preparation behind `MemoryStartup`, the paced member-store repair, embeddings and the model download, the legacy migration and re-embed sweep |
 | `slack/gateway_runtime/admission.py` | Opening subagent dispatch and the dashboard workers after the memory fence, child liveness, the adaptive controller and its overload-health sources, the dependency coordinator, runner task admission |
 | `slack/gateway_runtime/install_repair.py` | Repairing the install at boot: missing pip dependencies, the console script, the kiro-cli version check, the bounded kill and reap of those children, the pinned kiro-cli path an unattended spawn execs |
-| `slack/gateway_runtime/update_schedule.py` | When an available update applies: the scheduled provider and legacy checks, the update's effect, the in-flight-work census, the pause, drain and settle around an apply, the claimed restart and its re-exec |
+| `slack/gateway_runtime/update_schedule.py` | When an available update applies: the scheduled provider and legacy checks, the update's effect, the in-flight-work census, the pause, drain and settle around an apply, the update restart (`_restart_after_update_body`), the claimed restart and its re-exec |
 | `slack/gateway_runtime/update_apply.py` | Applying an update unattended: the git checkout path (fetch, reset, rebuild, dependency sync) and the managed-venv wheel |
 | `slack/gateway_runtime/nudge_wiring.py` | Building and starting AutoNudge: the fire and monitor dispatchers, the observer that persists and publishes loop transitions, the wake judge's evidence readers, the held and expired notices |
 | `slack/gateway_runtime/nudge_dashboard_fire.py` | One nudge or monitor wake into a dashboard slot: the slot turn, the work-ledger wake steer, the fire-time mode and crew-boundary refusals |
@@ -206,11 +206,17 @@ there; the responsibilities below live in private owners under
 | `slack/gateway_runtime/result_egress.py` | The delivery legs that render and redact an unattended result before egress: a cron session's response to its own channel, a channel reply, a heartbeat or background result to the dashboard slot or Slack, and the slot title it leaves |
 | `slack/gateway_runtime/exit_path.py` | The process exit path: the run marker's writer and self-clear, the signal handlers, the bounded cleanup of every service, and the final exit |
 | `slack/gateway_runtime/process_entry.py` | The process entry point: `run_gateway` with its signing-key preflight, and the background sweeps it starts (the KAS kiro-cli floor, predecessor session work directories, orphaned read-only specs) |
-| `slack/gateway_runtime/cron_fire.py` | Building the cron service and the one callback it fires for every job (`_init_cron`, whose `_cron_callback` runs the goal reminder, the overlap-guard check, the message job's fire-time gate and first-run tab, then dispatches), and what a fire needs before its turn runs: the capture (`_cron_capture`), resolving a crew alias to the agent it dispatches, acquiring that agent's session |
-| `slack/gateway_runtime/cron_exec.py` | Running a command or script job while holding the overlap guard, and delivering what a script returns |
+| `slack/gateway_runtime/cron_fire.py` | Building the cron service and the one callback it fires for every job (`_init_cron`, whose `_cron_callback` runs the goal reminder, the overlap-guard check, the message job's fire-time gate and first-run tab, then dispatches), and what a fire needs before its turn runs: the capture (`_cron_capture`), resolving a crew alias to the agent it dispatches, acquiring that agent's session; arming the scheduler once memory is ready, and the notice that startup moved an unreadable cron store aside |
+| `slack/gateway_runtime/cron_exec.py` | Running a command or script job while holding the overlap guard, and delivering what a script returns; the live dashboard secret a script's `notify()` authenticates with |
 | `slack/gateway_runtime/cron_turn.py` | A message job's agent turn: the agent sequence, and the single-agent turn with its dispatch, ACP-death and transient retries and cleanup, whose flags stay locals of one method |
 | `slack/gateway_runtime/cron_delivery.py` | Delivering a single-agent cron result: the duplicate and silent paths, the dashboard tab and bell, the channel the job came from, the Slack post and its uploads |
 | `slack/gateway_runtime/cron_failure.py` | Telling the user a cron run failed, once per distinct failure: the four one-spelling helpers and their two callers, the command/script/denial alert and the single-agent turn's failure path |
+| `slack/gateway_runtime/orchestrator_init.py` | Constructing the orchestrator: `__init__`, which records the run's options and credentials, runs each channel's hoist, registers the config appliers and gives every service, task and update field its not-yet-started value |
+| `slack/gateway_runtime/channel_boot.py` | Each channel's boot state, the live config appliers and the channel transports: the per-channel `_hoist_*` (`restart_channel` re-runs exactly one), `_register_config_appliers` with `_SLACK_APPLIER_PREFIXES`, `_start_channel_transports` |
+| `slack/gateway_runtime/subagent_wiring.py` | Building the sub-agent manager and the callbacks it reports through (`_init_subagents`): the status and event frames, spawn approval, the orphan notices, and `_subagent_done`, the one consumer every terminal report goes through, which resolves the parent's tab, composes the report, peeks at the wave, then hands the completion to the digest and its delivery route; the manager reads made off the loop, the scale coalescer, the slot a workflow step's spawn answers to |
+| `slack/gateway_runtime/subagent_report.py` | What a sub-agent completion says: `_compose_subagent_completion` (status, detail, announce and card facts, pure apart from redaction) and the wave digest `_subagent_wave_digest`, synchronous from reading the wave's record to the hold-or-flush decision |
+| `slack/gateway_runtime/subagent_injection.py` | Delivering a sub-agent completion into its parent: the tab that shows it (a turn, a queued card, the inline-collected skips, the bell once the tab closed), a channel or session parent with no tab, a cron parent, and the bell; the delivery marks a queued or dispatched hand-off owes |
+| `slack/gateway_runtime/runtime_charge.py` | Charging a runtime death only to whoever caused it: the cron gate verdict (`_apply_gate_verdict`), the cron failure attribution and substitute-streak hand-over (`_cron_failure_attribution`), the indivisible hand-over and charge (`_charge_failure`), and the completion injection's retry (`_inject_with_retry`), whose death arms reset the parent only for its own runtime |
 
 **One namespace.** `gateway_runtime.compose`, called once after the class body,
 rebinds every function an owner defines -- its module functions, the orchestrator
@@ -243,22 +249,17 @@ module's frozen public surface -- plus that no bound function needs a class body
 `_BASE_SURFACE` row, and that every name a test patches on the facade is read by some
 function at call time.
 
-**What stays in the facade, and why.** Repository guards read these constructs in
-`slack/gateway.py` by path, text, AST or `inspect.getsource`, so they live there until
-the change that moves one points its guards at the owner as well:
+**What stays in the facade, and why.** These constructs stay in `slack/gateway.py`:
 
-- construction: `__init__`, the per-channel `_hoist_*`, `_register_config_appliers`
-  and `_start_channel_transports` (the hot-reload audit reads the hoists);
-- the cron run's verdict and runtime-death charge: `_apply_gate_verdict`,
-  `_cron_failure_attribution` (whose run was it) and `_charge_failure` (the
-  synchronous hand-over and charge), beside the subagent completion path
-  (`_init_subagents`) whose death arms ask the same question: the runtime-death
-  audit requires the ownership predicate, the shared-death streak and its success
-  clear in one file;
-- the subagent completion path's usage-row, dispatch-site, memory-store and
-  reap-race audits;
+- the orchestrator's field declarations: the constructor and the channel hoists
+  assign through an annotated `self: GatewayOrchestrator`, where an inline annotation
+  is a type error, so the class declares every field they assign, without a value
+  (`test/test_gateway_orchestrator_init.py` pins the set and each annotation, and that
+  a `__new__` fixture still gets `AttributeError`);
 - `_restart_after_update`: `update_ownership.owning` wraps it at definition time,
-  and compose cannot rebind a wrapper another module compiled;
+  and compose cannot rebind a wrapper another module compiled, so the decorated
+  method stays and runs `_restart_after_update_body` (`update_schedule.py`) through
+  the class;
 - `_REQUIRED_DEPS` and `_is_brazil_install`, which the install repair reads through
   the class: the internal content scan judges every line a change adds, and a line
   of `_is_brazil_install` matches one of its rules, so the method stays where it was
@@ -268,8 +269,11 @@ the change that moves one points its guards at the owner as well:
 
 The dependency repair, the update path and AutoNudge moved to their owners together
 with their guards, and so did the approval callbacks, service boot, the heartbeat, the
-result egress legs, the exit path, the process entry point and the cron callback with
-its arms, turn, delivery and failure alerts: the spawn and isolator
+result egress legs, the exit path, the process entry point, the cron callback with
+its arms, turn, delivery and failure alerts, the constructor and channel boot, the
+sub-agent completion consumer with its report, digest and delivery routes, and the
+runtime-death charge (its guards read the one-file co-location of the ownership
+predicate, the shared-death streak and its clear in `runtime_charge.py`): the spawn and isolator
 audits (`test_spawn_audit`, `test_internal_python_isolation`), the respawn and
 restart-fence pins, the composer, turn-ceiling, event-log, wake-judge, transcript and
 memory-store tables, the hard-exit drain ratchets (SEL, `gateway.log`, crew log, member
@@ -1275,8 +1279,9 @@ Messages arriving while a session is busy are queued with ⏳ reaction and drain
 
 `GatewayOrchestrator` is the process's channel host, so it owns three config
 appliers, registered in `_register_config_appliers` on the shared `ConfigWatch`
-(the appliers, `restart_channel` and the boot re-hoist are
-`slack/gateway_runtime/channel_lifecycle.py`; the hoists stay in `gateway.py`)
+(the appliers' callbacks, `restart_channel` and the boot re-hoist are
+`slack/gateway_runtime/channel_lifecycle.py`; the hoists and the registration are
+`slack/gateway_runtime/channel_boot.py`)
 (`config/live.py`). The `Subscription` objects are kept on `self._config_subs`
 because the watcher holds a bound method WEAKLY — an orchestrator a test builds and
 discards must not pin itself into the registry. See
