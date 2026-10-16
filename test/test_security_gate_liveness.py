@@ -353,8 +353,9 @@ def _url_payload_command(n: int) -> str:
 #: view and raw fail-closed body-file substrings. The normalized view covers
 #: carriers and respelled programs without one spelling-chase per wrapper; the
 #: shared shell reader and its tests carry the supporting token/assignment
-#: machinery.
-_PACKAGE_LINE_BUDGET = 30_589
+#: machinery. The same change gives gh's file-body denial its own catalog row,
+#: so it can be turned off without turning off a curl row.
+_PACKAGE_LINE_BUDGET = 30_312
 
 #: Ceiling on any ONE file in the package. This is what the bound is really for --
 #: a package total says nothing about a single file growing back into a second

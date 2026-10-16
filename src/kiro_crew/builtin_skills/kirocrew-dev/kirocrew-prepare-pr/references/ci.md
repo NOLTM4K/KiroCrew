@@ -52,8 +52,9 @@ Why: `references/rationale.md`.
 
 A GraphQL error or a rate limit on `gh pr edit` leaves the old body in place.
 PATCH it over REST instead, then read the body back to confirm it landed. Stream
-the generated JSON on stdin: this avoids both file-argument parsing differences
-and a request-body upload from a local path.
+the generated JSON on stdin with `--input -`. The data-exfiltration gate refuses
+`--input <file>` and `-F body=@<file>`; the stdin form is the one it allows on
+purpose, so this fallback keeps working (a test pins both verdicts).
 
 ```bash
 python3 -c 'import json; print(json.dumps({"body": open("<file>").read()}))' |

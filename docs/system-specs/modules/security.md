@@ -2332,6 +2332,17 @@ curl out of its reach, and the `date`/inert-search carve-out is its only relief.
 The normalized argv view adds program-anchored reach for token-level spellings
 the raw text cannot express.
 
+The gh rule has its own catalog row, `data-exfil-gh-file-body`: it covers
+`gh api --input <file>`, `--field k=@file` and `gh release --notes-file <file>`
+(`-F <file>`), and turning it off leaves curl's `-d @` row enforced.
+`gh … --input -` and `--field k=@-` (stdin) are allowed on purpose: stdin is the
+prepare-pr skill's REST fallback for a PR body. A pipe can carry the same file
+(`cat f | gh api … --input -`), so these rows add friction against an agent
+reaching for a file-body flag; they do not contain the data. A command name held in a variable (`"$COMPOSE" exec -T`)
+names no program the normalized view can read and is not matched there; the
+raw view's substrings still apply to it. The normalized view reads one command
+line; a payload inside a carrier (`bash -c '…'`) is matched by the raw view only.
+
 ### SEL Forward Callback (`sel.py`)
 
 `set_forward_callback()` enables centralized log integration (basin/ktap). Events are redacted via `redact()` before forwarding to strip credentials and exfiltration URLs from string fields. Callback failures are logged at debug level (never silently swallowed).

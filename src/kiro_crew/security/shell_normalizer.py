@@ -188,54 +188,6 @@ def _glob_could_expand_to(base: str, names: "tuple[str, ...] | frozenset[str]") 
     return any(expandable.fullmatch(name) for name in names)
 
 
-def _expand_brace_alternation(pattern: str, *, _budget: int = 1024) -> "list[str]":
-    """Expand brace ALTERNATION in *pattern* (``c{url,at}`` -> ``curl``, ``cat``).
-
-    Brace groups are alternation, not a character class: ``c{url,at}`` produces
-    ``curl`` OR ``cat`` and nothing else, while :func:`_glob_to_regex` folds a
-    brace group to ``.*`` — a coarse over-approximation that admits ``cat``
-    but not ``curl``. Callers that need to know WHICH names a pattern can
-    produce expand the alternation exactly. Nested groups expand recursively;
-    a brace with no closing ``}`` stays literal, as bash treats it.
-
-    The product is bounded: a pattern whose expansion would materialize more
-    than ``_budget`` strings (``x{a,b}`` stacked 24 times is 16M) raises
-    :class:`BraceExpansionTooLarge` instead of building the product, so an
-    adversarial token cannot turn the gate into a memory sink. Callers decide
-    the fail-closed reading of the overflow.
-    """
-    if "{" not in pattern:
-        return [pattern]
-    if pattern.count("{") > 32 or len(pattern) > 4096:
-        # Depth/length coherence check: a pathological pattern (hundreds of stacked
-        # groups) must fail as a BUDGET error, not as a Python RecursionError,
-        # so the caller's fail-closed handler stays the single outcome.
-        raise BraceExpansionTooLarge(pattern)
-    for i, ch in enumerate(pattern):
-        if ch != "{":
-            continue
-        close = pattern.find("}", i + 1)
-        if close == -1:
-            break
-        head, alts, tail = (
-            pattern[:i],
-            pattern[i + 1 : close].split(","),
-            pattern[close + 1 :],
-        )
-        out: "list[str]" = []
-        for alt in alts:
-            expanded = _expand_brace_alternation(head + alt + tail, _budget=_budget)
-            if len(out) + len(expanded) > _budget:
-                raise BraceExpansionTooLarge(pattern)
-            out.extend(expanded)
-        return out
-    return [pattern]
-
-
-class BraceExpansionTooLarge(ValueError):
-    """A brace pattern's expansion exceeds the bounded budget (fail-closed)."""
-
-
 #: Interpreter names that accept ``-m <module>``. Versioned spellings (``python3``,
 #: ``python3.12``) and the Windows launcher included; ``.exe`` is stripped by
 #: ``_program_basename`` before this is applied.

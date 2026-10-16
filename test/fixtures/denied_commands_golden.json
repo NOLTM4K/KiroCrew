@@ -114,6 +114,12 @@
     "description": "Blocks `wget --post-file`, which posts the contents of a local file to a remote endpoint."
   },
   {
+    "id": "data-exfil-gh-file-body",
+    "pattern": ".*(^|[;&|(]\\s*)gh\\s+api\\s[^;&|\\n]*--input[= ]+(['\"]?[^-'\"\\s]|['\"]?-[^\\s'\"]).*",
+    "category": "credential-exfil",
+    "description": "Blocks `gh` sending a request body read from a LOCAL FILE: `gh api --input <file>`, `--field k=@file`, and `gh release --notes-file <file>`. Reading the body from stdin (`--input -`, `--field k=@-`) is not blocked. Separate from the curl rows, so turning it off leaves `curl -d @file` blocked."
+  },
+  {
     "id": "data-exfil-nc-file-redirect",
     "pattern": ".*(^|\\s)nc(at)?\\s+\\S.*<.*",
     "category": "credential-exfil",
