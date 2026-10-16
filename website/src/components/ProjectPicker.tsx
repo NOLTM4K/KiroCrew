@@ -266,9 +266,6 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
   // retired by a newer recents read (for example, after close/reopen), never by
   // borrowing the ticket from an unrelated directory or drive-list request.
   const recentSeq = useRef(0)
-  // Engagement with Browse retires this open's claim on the landing tab, so a list read that
-  // answers late cannot move the user off the pane they are already working in.
-  const holdTab = useRef(false)
   // Read by the open effect only, so a caller whose field changes while the picker is up does
   // not re-run the open (which would also re-read recents and reset the tab).
   const startPathRef = useRef(startPath)
@@ -422,7 +419,7 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
     && (!listFailure.path || !browsePath || namesListing(listFailure.path, browsePath))
   const atDriveRoot = parentIsDriveList(browsePath, browseParent)
   const canGoUp = atDriveRoot || (!!browseParent && browseParent !== browsePath)
-  const goUp = () => { holdTab.current = true; if (atDriveRoot) browseDrives(); else browse(browseParent) }
+  const goUp = () => { if (atDriveRoot) browseDrives(); else browse(browseParent) }
 
   useEffect(() => {
     if (!open) return
@@ -442,7 +439,6 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
     const ticket = ++recentSeq.current
     const favTicket = ++favoriteSeq.current
     landing.current = { ticket }
-    holdTab.current = false
     // This open retires any retry still out, so its handlers return without clearing the flag.
     setRetryingRecent(false)
     // The tab is chosen once BOTH reads have settled, by whichever settles second. Favourites
@@ -454,7 +450,6 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
       landing.current[which] = dirs
       const { favorites, recent } = landing.current
       if (favorites === undefined || recent === undefined) return
-      if (holdTab.current) return
       setTab(favorites?.length ? 'favorites' : recent?.length ? 'recent' : 'browse')
     }
     const start = startPathRef.current.trim()
@@ -603,7 +598,7 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
   const recentNav = useListKeyboardNav({
     open: open && tab === 'recent' && !footerFocused,
     count: filteredRecent.length,
-    onChoose: i => { if (recentFailure || retryingRecent) return; const d = filteredRecent[i]; if (d) select(d) },
+    onChoose: i => { const d = filteredRecent[i]; if (d) select(d) },
     // The star is a pointer target inside a listbox whose own document-capture listener
     // claims Enter and Tab, so no tab stop could reach it. Alt/Option+Enter is the hook's
     // sanctioned second action on the highlighted row, and it is what gives the toggle a
@@ -760,13 +755,13 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
     })()}>
       {/* Tabs */}
       <div className="flex border-b border-border">
-        <button className={`flex-1 px-3 py-2 text-[12px] font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'favorites' ? 'text-accent border-b-2 border-accent' : 'text-muted hover:text-text'}`} onMouseDown={e => { e.preventDefault(); holdTab.current = true; setTab('favorites') }}>
+        <button className={`flex-1 px-3 py-2 text-[12px] font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'favorites' ? 'text-accent border-b-2 border-accent' : 'text-muted hover:text-text'}`} onMouseDown={e => { e.preventDefault(); setTab('favorites') }}>
           <Star size={12} /> {i18nT('components.projectPicker.favorites')}
         </button>
-        <button className={`flex-1 px-3 py-2 text-[12px] font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'recent' ? 'text-accent border-b-2 border-accent' : 'text-muted hover:text-text'}`} onMouseDown={e => { e.preventDefault(); holdTab.current = true; setTab('recent') }}>
+        <button className={`flex-1 px-3 py-2 text-[12px] font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'recent' ? 'text-accent border-b-2 border-accent' : 'text-muted hover:text-text'}`} onMouseDown={e => { e.preventDefault(); setTab('recent') }}>
           <Clock size={12} /> {i18nT('components.projectPicker.recent')}
         </button>
-        <button className={`flex-1 px-3 py-2 text-[12px] font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'browse' ? 'text-accent border-b-2 border-accent' : 'text-muted hover:text-text'}`} onMouseDown={e => { e.preventDefault(); holdTab.current = true; setTab('browse') }}>
+        <button className={`flex-1 px-3 py-2 text-[12px] font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'browse' ? 'text-accent border-b-2 border-accent' : 'text-muted hover:text-text'}`} onMouseDown={e => { e.preventDefault(); setTab('browse') }}>
           <FolderOpen size={12} /> {i18nT('components.projectPicker.browse')}
         </button>
       </div>
@@ -922,7 +917,7 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
                   ref={el => { recentNav.itemRefs.current[i] = el }}
                   className={`w-full text-left pl-3 pr-9 py-2 flex items-center gap-2 cursor-pointer transition-colors ${i === recentNav.selected ? 'bg-bg-hover' : 'hover:bg-bg-hover'}`}
                   onMouseEnter={() => recentNav.setSelected(i)}
-                  onMouseDown={e => { e.preventDefault(); if (recentFailure || retryingRecent) return; select(d) }}
+                  onMouseDown={e => { e.preventDefault(); select(d) }}
                 >
                   <FolderOpen size={12} className="text-accent shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -968,7 +963,6 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
               value={input}
               onChange={e => {
                 setInput(e.target.value); setListFailure(null)
-                holdTab.current = true
                 // A keystroke retires every listing still in flight: a drive list
                 // answering now would run `setInput('')` and erase what was just
                 // typed before its own auto-drill fires (GPT review on #11424).
@@ -1069,7 +1063,7 @@ export default function ProjectPicker({ open, onOpenChange, anchorRef, anchorRec
                 ref={el => { browseItemRefs.current[i] = el }}
                 className={`w-full text-left px-3 py-1.5 flex items-center gap-2 cursor-pointer transition-colors ${i === browseSel ? 'bg-bg-hover' : 'hover:bg-bg-hover'}`}
                 onMouseEnter={() => setBrowseSel(i)}
-                onClick={() => { holdTab.current = true; browse(d.path) }}
+                onClick={() => browse(d.path)}
               >
                 <FolderOpen size={12} className="text-accent shrink-0" />
                 <span className="text-[13px] font-mono text-text truncate">{d.name}</span>
