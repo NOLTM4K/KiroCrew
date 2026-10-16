@@ -6840,6 +6840,8 @@
       "save": "Enregistrer",
       "scroll_to_the_highlighted_text": "Défiler jusqu’au texte surligné",
       "shared_comment": "Commentaire partagé",
+      "to_send": "À envoyer",
+      "to_send_hint": "Pas encore envoyé. Envoyer transmet ce commentaire au chat.",
       "show": "Afficher",
       "unknown": "Inconnu"
     },

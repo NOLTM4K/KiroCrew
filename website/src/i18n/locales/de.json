@@ -6727,6 +6727,8 @@
       "save": "Speichern",
       "scroll_to_the_highlighted_text": "Zum markierten Text scrollen",
       "shared_comment": "Geteilter Kommentar",
+      "to_send": "Zu senden",
+      "to_send_hint": "Noch nicht gesendet. „Absenden“ schickt diesen Kommentar an den Chat.",
       "show": "Anzeigen",
       "unknown": "Unbekannt"
     },

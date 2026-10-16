@@ -6840,6 +6840,8 @@
       "save": "Salva",
       "scroll_to_the_highlighted_text": "Scorri fino al testo evidenziato",
       "shared_comment": "Commento condiviso",
+      "to_send": "Da inviare",
+      "to_send_hint": "Non ancora inviato. Invia manda questo commento alla chat.",
       "show": "Mostra",
       "unknown": "Sconosciuto"
     },

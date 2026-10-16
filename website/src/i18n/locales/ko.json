@@ -6614,6 +6614,8 @@
       "save": "저장",
       "scroll_to_the_highlighted_text": "강조 표시된 텍스트로 스크롤",
       "shared_comment": "공유 댓글",
+      "to_send": "보낼 예정",
+      "to_send_hint": "아직 보내지 않았습니다. 제출하면 이 댓글이 채팅으로 전송됩니다.",
       "show": "표시",
       "unknown": "알 수 없음"
     },
