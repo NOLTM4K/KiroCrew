@@ -448,7 +448,7 @@ export default function ChatPane({
   const { switchError, setSwitchError } = pickerActions
 
   const {
-    uploadError, setUploadError, uploadHint, setUploadHint, sendHeld, uploadCancellable, uploadMutation,
+    uploadError, setUploadError, uploadHint, setUploadHint, sendHeld, uploadCount, uploadMutation,
     cancelUpload, uploadFiles, dragOver, dropTargetProps,
   } = useChatPaneUploads({ slotKey, dispatch, slotKeyRef, mountedRef, setInput, dashCfg, dashCfgError })
 
@@ -1036,7 +1036,8 @@ export default function ChatPane({
           // addresses it by name rather than the product ("Message Kiro Crew…").
           placeholder={crewmate ? i18nT('components.chatInput.message_placeholder', { bot: crewmate.label || crewmate.name }) : undefined}
           onUploadFiles={uploadFiles}
-          onCancelUpload={uploadCancellable ? cancelUpload : undefined}
+          onCancelUpload={uploadCount > 0 ? cancelUpload : undefined}
+          uploadCount={uploadCount}
           pendingFiles={pendingFiles}
           pendingDirs={pendingDirs}
           pendingQuote={messageQuote.pendingQuote}
