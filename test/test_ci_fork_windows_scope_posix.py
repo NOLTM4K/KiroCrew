@@ -36,14 +36,14 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-def _repo_with_change(tmp_path: Path, added: str) -> tuple[Path, str]:
-    """A repo whose HEAD adds ``added`` to a .py file on top of a base commit."""
+def _repo_with_change(tmp_path: Path, added: str, removed: str = "") -> tuple[Path, str]:
+    """A repo whose HEAD adds ``added`` to (and drops ``removed`` from) a .py file."""
     repo = tmp_path / "repo"
     repo.mkdir(parents=True)
     _git(repo, "init", "-q")
     _git(repo, "config", "user.email", "t@example.invalid")
     _git(repo, "config", "user.name", "t")
-    (repo / "mod.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "mod.py").write_text("x = 1\n" + (removed + "\n" if removed else ""), encoding="utf-8")
     _git(repo, "add", "mod.py")
     _git(repo, "commit", "-q", "-m", "base")
     base = _git(repo, "rev-parse", "HEAD")
@@ -60,16 +60,19 @@ def _run(
     labelled: str = "false",
     full_run: str = "false",
     added: str = "y = 2",
+    removed: str = "",
     base: str | None = None,
+    primitives: str | None = None,
 ) -> tuple[dict[str, str], str]:
     bash = shutil.which("bash")
     assert bash is not None, "bash is required to execute the scope step"
-    repo, real_base = _repo_with_change(tmp_path, added)
+    repo, real_base = _repo_with_change(tmp_path, added, removed)
     out = tmp_path / "gh-output"
     out.touch()
     step = _scope_step()
     proc = subprocess.run(
-        [bash, "-c", step["run"]],
+        # The shell flags Actions uses for `shell: bash`.
+        [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", step["run"]],
         cwd=repo,
         check=False,
         capture_output=True,
@@ -84,7 +87,9 @@ def _run(
             "LABELLED": labelled,
             "FULL_RUN": full_run,
             "BASE_SHA": real_base if base is None else base,
-            "WINDOWS_PRIMITIVES": step["env"]["WINDOWS_PRIMITIVES"],
+            "WINDOWS_PRIMITIVES": (
+                step["env"]["WINDOWS_PRIMITIVES"] if primitives is None else primitives
+            ),
             "GITHUB_OUTPUT": str(out),
         },
     )
@@ -114,7 +119,15 @@ class TestTheForkWindowsScopeWiring:
         filt = next(s for s in _ci()["jobs"]["changes"]["steps"] if s.get("id") == "filter")[
             "with"
         ]["filters"]
-        for pattern in ("'**/*windows*'", "'src/kiro_crew/platform_compat.py'", "'pyproject.toml'"):
+        for pattern in (
+            "'**/*windows*'",
+            "'.github/actions/setup-windows-tests/**'",
+            "'**/*.ps1'",
+            "'**/conftest.py'",
+            "'src/kiro_crew/platform_compat.py'",
+            "'src/kiro_crew/flock_compat.py'",
+            "'pyproject.toml'",
+        ):
             assert pattern in filt
 
 
@@ -141,7 +154,20 @@ class TestTheForkWindowsScope:
             (
                 'if sys.platform == "win32":',
                 "if IS_WINDOWS:",
+                "if _IS_WINDOWS:",
+                "if not _IS_WINDOWS:",
                 "if os.name == 'nt':",
+                'if os.name != "nt":',
+                "if sys.platform.startswith('win'):",
+                "if platform.system() == 'Windows':",
+                "flags = subprocess.CREATE_NEW_PROCESS_GROUP",
+                "flags = subprocess.CREATE_NO_WINDOW",
+                "flags = DETACHED_PROCESS",
+                "os.kill(pid, signal.CTRL_BREAK_EVENT)",
+                "lib = ctypes.WinDLL('kernel32')",
+                "lib = ctypes.windll.kernel32",
+                "proto = ctypes.WINFUNCTYPE(None)",
+                "p = PureWindowsPath(raw)",
                 "import msvcrt",
                 "import winreg",
             )
@@ -149,9 +175,27 @@ class TestTheForkWindowsScope:
             outputs, _ = _run(tmp_path / str(i), added=line)
             assert outputs["windows_tests"] == "true", line
 
+    def test_a_removed_windows_branch_runs_a_fork(self, tmp_path: Path) -> None:
+        for i, line in enumerate(
+            (
+                "if os.name == 'nt': pass",
+                "if IS_WINDOWS: pass",
+                "import msvcrt",
+            )
+        ):
+            outputs, _ = _run(tmp_path / str(i), added="y = 2", removed=line)
+            assert outputs["windows_tests"] == "true", line
+
     def test_a_word_that_only_contains_a_needle_does_not(self, tmp_path: Path) -> None:
-        outputs, _ = _run(tmp_path, added="mywin32helper = 1")
-        assert outputs["windows_tests"] == "false"
+        # One needle per side, so dropping either boundary turns this red.
+        assert _run(tmp_path / "suffix", added="mywin32helper = 1")[0]["windows_tests"] == "false"
+        assert _run(tmp_path / "prefix", added="xwin32 = 1")[0]["windows_tests"] == "false"
+
+    def test_a_failing_grep_runs_a_fork(self, tmp_path: Path) -> None:
+        # An unbalanced pattern makes grep exit 2: fail toward running the suite.
+        outputs, stdout = _run(tmp_path, primitives="(")
+        assert outputs["windows_tests"] == "true"
+        assert "unreadable-diff" in stdout
 
     def test_an_unreadable_diff_runs_a_fork(self, tmp_path: Path) -> None:
         outputs, _ = _run(tmp_path, base="0" * 40)
