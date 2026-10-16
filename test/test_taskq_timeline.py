@@ -578,6 +578,20 @@ def test_an_unterminated_pem_mapping_key_is_redacted_before_json_encoding(
     assert "[REDACTED" in out.markdown
 
 
+@pytest.mark.parametrize("stream", _STREAMS)
+def test_an_unterminated_pem_top_level_key_is_redacted_before_its_value_is_joined(
+    stream: str,
+) -> None:
+    """A top-level key is put on the line as ``key=value``. Scrubbing only the joined
+    line lets the ``={}`` after an unterminated PEM block stop the pattern short of
+    the block's last base64 line, so the key is scrubbed on its own first."""
+    fake, row_id, sources = _planted(stream, lambda _key: {TRUNCATED_PEM: {}})
+    out = _render(fake, row_id, sources=sources)
+    assert out is not None
+    assert "MIIEow" not in out.markdown
+    assert "[REDACTED" in out.markdown
+
+
 def _scrub_keeping_key_types(value: Any) -> Any:
     """A caller's scrubber that redacts string leaves and leaves every key as it is."""
     if isinstance(value, str):

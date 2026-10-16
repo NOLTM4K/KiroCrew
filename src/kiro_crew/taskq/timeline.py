@@ -275,7 +275,7 @@ def _describe(
         head = f"{_value(data['from'], scrub)} -> {_value(data['to'], scrub)}"
         omit |= {"from", "to"}
     pairs = [
-        f"{key}={_value(val, scrub)}"
+        f"{_text(scrub, key)}={_value(val, scrub)}"
         for key, val in sorted(data.items(), key=lambda kv: str(kv[0]))
         if key not in omit
     ]
