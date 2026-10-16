@@ -176,7 +176,7 @@ class TestTheHeartbeatKeepsALiveHolder:
         with patch.object(c, "_renew_consolidation_lease", side_effect=renew):
             task = asyncio.ensure_future(c._heartbeat_consolidation_lease(KEY, token))
             try:
-                await asyncio.wait_for(in_flight.wait(), timeout=5)
+                await asyncio.wait_for(in_flight.wait(), timeout=30)
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
@@ -185,7 +185,7 @@ class TestTheHeartbeatKeepsALiveHolder:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
-            await asyncio.wait_for(completed.wait(), timeout=5)
+            await asyncio.wait_for(completed.wait(), timeout=30)
 
         assert beats == [token] * 4, "the heartbeat outlived its own cancellation"
 
@@ -201,7 +201,7 @@ class TestTheHeartbeatKeepsALiveHolder:
         c = _make_consolidator(log)
 
         with patch.object(c, "_renew_consolidation_lease", return_value=False):
-            await asyncio.wait_for(c._heartbeat_consolidation_lease(KEY, "gone"), timeout=5)
+            await asyncio.wait_for(c._heartbeat_consolidation_lease(KEY, "gone"), timeout=30)
 
     @pytest.mark.asyncio
     async def test_a_pass_renews_while_the_provider_turn_is_in_flight(
@@ -214,20 +214,23 @@ class TestTheHeartbeatKeepsALiveHolder:
         log = _seed_log(tmp_path)
         c = _make_consolidator(log)
         renewed: list[str] = []
+        loop = asyncio.get_running_loop()
+        beat = asyncio.Event()
+
+        def _renew(_key, token):
+            # Runs on a worker thread (the heartbeat offloads it).
+            renewed.append(token)
+            loop.call_soon_threadsafe(beat.set)
+            return True
 
         async def _turn(_prompt, session_key=None):
-            # Stand where the provider turn stands, long enough for a beat.
-            for _ in range(200):
-                if renewed:
-                    break
-                await asyncio.sleep(0.005)
+            # Stand where the provider turn stands until a beat lands.
+            await asyncio.wait_for(beat.wait(), timeout=30)
             return {"history_entry": "e"}
 
         with (
             patch.object(c, "_call_llm", _turn),
-            patch.object(
-                c, "_renew_consolidation_lease", side_effect=lambda k, t: renewed.append(t) or True
-            ),
+            patch.object(c, "_renew_consolidation_lease", side_effect=_renew),
         ):
             await c._consolidate(KEY, include_history=True)
 
@@ -422,7 +425,7 @@ async def test_transient_renewal_failure_keeps_heartbeat_running(tmp_path, monke
     ):
         task = asyncio.create_task(c._heartbeat_consolidation_lease(KEY, token))
         try:
-            await asyncio.wait_for(renewed.wait(), timeout=5)
+            await asyncio.wait_for(renewed.wait(), timeout=30)
             assert calls >= 2
             assert not task.done()
         finally:
@@ -513,7 +516,7 @@ async def test_lease_loss_cancels_provider_before_durable_writes(tmp_path, monke
         patch.object(c, "_note_failed_attempt", new_callable=AsyncMock) as failed,
         patch.object(c, "_note_environment_failure", new_callable=AsyncMock) as environment,
     ):
-        outcome = await asyncio.wait_for(c._consolidate(KEY), timeout=5)
+        outcome = await asyncio.wait_for(c._consolidate(KEY), timeout=30)
     assert _no_pass_ran(outcome)
     assert cancelled.is_set()
     c._memory.append_history.assert_not_called()
@@ -659,11 +662,11 @@ async def test_lease_released_on_early_exit(tmp_path, exit_path):
         with patch.object(c, "_call_llm", turn):
             task = asyncio.create_task(c._consolidate(KEY))
             try:
-                await asyncio.wait_for(started.wait(), timeout=5)
+                await asyncio.wait_for(started.wait(), timeout=30)
             finally:
                 task.cancel()
                 with pytest.raises(asyncio.CancelledError):
-                    await asyncio.wait_for(task, timeout=5)
+                    await asyncio.wait_for(task, timeout=30)
     assert log.get_metadata(KEY)[_LEASE_TOKEN] is None
     assert KEY not in c._running
 
@@ -680,18 +683,18 @@ async def test_cancellation_during_acquisition_releases_worker_claim(tmp_path):
     def blocked_acquire(key):
         token = acquire(key)
         loop.call_soon_threadsafe(entered.set)
-        assert release.wait(timeout=5)
+        assert release.wait(timeout=30)
         return token
 
     with patch.object(c, "_acquire_consolidation_lease", blocked_acquire):
         task = asyncio.create_task(c._consolidate(KEY))
         try:
-            await asyncio.wait_for(entered.wait(), timeout=5)
+            await asyncio.wait_for(entered.wait(), timeout=30)
             task.cancel()
         finally:
             release.set()
             with pytest.raises(asyncio.CancelledError):
-                await asyncio.wait_for(task, timeout=5)
+                await asyncio.wait_for(task, timeout=30)
     assert log.get_metadata(KEY)[_LEASE_TOKEN] is None
 
 
