@@ -175,11 +175,24 @@ def validate_page(html: Any) -> int:
             "shrink the inlined markup, or read the data from "
             f"window.{WINDOW_GLOBAL}.fields instead of inlining it",
         )
-    skeleton = _SKELETON_TAG_RE.search(html)
+    # A document tag inside a <script> or <style> element's text is not markup --
+    # minified ECharts carries "<body" in a string literal -- so look for the
+    # skeleton tag only in what falls OUTSIDE the code spans code_spans() reports.
+    # Where that scan stops early (an unterminated element) the remainder has no
+    # span and is scanned, so a real document tag is refused, never under-refused.
+    spans = code_spans(html)
+    skeleton = next(
+        (
+            m.group(0)
+            for m in _SKELETON_TAG_RE.finditer(html)
+            if not any(start <= m.start() < end for start, end in spans)
+        ),
+        None,
+    )
     if skeleton is not None:
         raise PageError(
             "page_has_skeleton",
-            f"the page contains the document tag {skeleton.group(0)!r} -- write only "
+            f"the page contains the document tag {skeleton!r} -- write only "
             "the inline body; the host supplies <!doctype>, <html>, <head> and "
             "<body>, and owns the page's security policy",
         )
