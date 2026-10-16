@@ -147,6 +147,17 @@ class TestCatalog:
             "tailscale serve --https 443 --set-path=/ off",
             "tailscale serve reset",
             "sudo tailscale serve --bg --https=443 http://127.0.0.1:5476",
+            # Command position after a separator, a wrapper, an assignment
+            # prefix, a path, or inside a substitution.
+            "cd /srv && tailscale serve --bg 443",
+            "echo ok; tailscale funnel 3000",
+            "sudo -E tailscale up --ssh",
+            "env FOO=1 tailscale up",
+            "FOO=1 tailscale up",
+            "nohup tailscale serve 443 &",
+            "echo $(tailscale serve 443)",
+            "(tailscale up)",
+            "echo ok\ntailscale up",
             "tailscale funnel 443 on",
             "tailscale funnel reset",
             "tailscale up --ssh",
@@ -209,6 +220,18 @@ class TestCatalog:
             "tailscale configure kubeconfig",
             "echo 'the tailscale is up on the boat'",
             "grep -r tailscale src/",
+            # `tailscale` as an ARGUMENT, not the program: the rows anchor the
+            # name at command position (`_TAILSCALE_PROGRAM`). These are the
+            # Security Scope Review's confirmed newly-refused operations under
+            # the earlier match-anywhere prefix.
+            'grep -rn "tailscale serve" docs/ src/',
+            "rg -n 'tailscale set --operator' docs/guides/remote-and-mobile.md",
+            'git log --oneline --grep="tailscale funnel"',
+            'git commit -m "docs(remote): explain why tailscale down severs the dashboard"',
+            'gh pr create --title "fix(tailnet): refuse when tailscale serve owns 443" --body x',
+            'python -m pytest test/test_tailnet_cli.py -k "tailscale serve" -q',
+            'echo "Run: sudo tailscale set --operator=$USER"',
+            "grep tailscale set.py",
         ):
             assert not security.is_denied(
                 allowed, denied_regexes=effective
@@ -257,17 +280,44 @@ class TestCatalog:
             "env tailscale funnel 3000",
             'eval "tailscale funnel 3000"',
             "sh -c 'tailscale funnel 3000'",
+            # A literal same-line assignment in program position: the family is
+            # also matched against the command with those assignments resolved
+            # (``_NETWORK_EXPOSURE_RULE_PATTERNS``), so the name the shell will
+            # substitute is the name the matcher reads.
+            't=tailscale; "$t" funnel 3000',
+            "TS=tailscale; $TS funnel 3000",
+            't=tailscale && "${t}" serve --bg 443',
+            't=tail; u=scale; "$t$u" funnel 3000',
+            "t=tailscale; sudo $t up --ssh",
         ):
             assert security.is_denied(
                 blocked, denied_regexes=effective
             ), f"tailscale exposure not blocked: {blocked!r}"
 
+        # The resolved view keeps the family's read carve-outs, and a value that
+        # does not resolve to the program refuses nothing.
+        for allowed in (
+            't=tailscale; "$t" status',
+            't=tailscale; "$t" serve status --json',
+            "t=funnel; echo $t",
+            "t=tailscale; echo done",
+        ):
+            assert not security.is_denied(
+                allowed, denied_regexes=effective
+            ), f"resolved tailscale read wrongly blocked: {allowed!r}"
+
+        # Disabling the family disables the resolved view too.
+        without_family = [p for p in effective if p not in security._NETWORK_EXPOSURE_RULE_PATTERNS]
+        assert not security.is_denied(
+            't=tailscale; "$t" funnel 3000', denied_regexes=without_family
+        )
+
         # ── Open: the matcher never sees the name adjacent to the verb ──
-        # Two different reasons, and the first four are the ones the spec's
-        # scope paragraph describes: a shell resolves a parameter expansion or a
-        # command substitution before it resolves the program, so the name is
-        # not in the text at all. Denying those needs the program position,
-        # after resolution, which this tier does not have.
+        # Two different reasons, and the first two are the ones the spec's
+        # scope paragraph describes: a shell resolves a command substitution
+        # before it resolves the program, so the name is not in the text at all.
+        # (A LITERAL same-line assignment is resolved and is in the closed set
+        # above; a substitution's output is not.)
         #
         # The brace forms are here for a DIFFERENT reason and the distinction
         # matters, because an earlier version of this test filed them under
@@ -281,11 +331,9 @@ class TestCatalog:
         # That is a property of the tier, not of this family: `{rm,} -rf /` and
         # `aws s3 {rb,} s3://b --force` are allowed too, against rules this
         # change did not write. Closing it means teaching the shared
-        # quote-normalized view to expand braces, which moves all 117 rules at
+        # quote-normalized view to expand braces, which moves every rule at
         # once and belongs in its own change rather than riding along here.
         for open_case in (
-            't=tailscale; "$t" funnel 3000',
-            "TS=tailscale; $TS funnel 3000",
             "$(echo tailscale) funnel 3000",
             "`echo tailscale` funnel 3000",
             "{tailscale,} funnel 3000",
@@ -480,7 +528,9 @@ class TestCatalog:
         The flag-run nests ``\S+`` inside a starred group, which backtracks
         exponentially on a long run of flags that never reaches the verb:
         measured at 16.7ms for 24 flags, 123ms for 28 and 34.9 SECONDS for 40
-        before the quantifier was made possessive. An agent chooses this input.
+        on the raw form. ``_linearize_deny_pattern`` rewrites the run into its
+        linear-time equivalent before it is compiled, and this test pins that the
+        rewrite is what executes. An agent chooses this input.
         """
         from kiro_crew import security
 

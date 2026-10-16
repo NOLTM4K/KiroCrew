@@ -348,7 +348,14 @@ def _url_payload_command(n: int) -> str:
 #: spares an ordered alphabet and a data URI payload, the flag it sets, the one place pass 3
 #: reads it, and the two checks that tell those shapes from a key. No credential branch, gate
 #: verdict or other pass moved.
-_PACKAGE_LINE_BUDGET = 29_411
+#:
+#: Raised again, from 29,411, for the tailscale ``network-exposure`` family: six
+#: catalog rows in ``denied_rules.py`` (most of the growth is their comments and
+#: descriptions), the family's pattern set, and the 24-line resolved-assignment
+#: copy in ``is_denied`` that matches only those rows. No other rule, floor or
+#: pass moved. Plus 12 for ``_TAILSCALE_PROGRAM``, the command-position anchor
+#: the six rows share.
+_PACKAGE_LINE_BUDGET = 29_631
 
 #: Ceiling on any ONE file in the package. This is what the bound is really for --
 #: a package total says nothing about a single file growing back into a second

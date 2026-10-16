@@ -267,6 +267,21 @@ _NETCAT_EXEC_PATTERN = r"(?<![\w.-])(?<!\w=)nc\s+-e"
 # variables that hold a SECRET rather than a path; that set is closed and
 # enumerable, which is why a name-based rule is defensible there and not here.
 
+# The ``tailscale`` program in COMMAND position, for the network-exposure rows.
+# Anchored the way ``sandbox-escape-ssh-self`` is: at the start of the input, a
+# command separator, or a substitution opener, then optional opening quotes, then
+# at most one wrapper (``sudo``/``env``/... or a leading ``VAR=value``) and an
+# optional path.  So ``grep -rn "tailscale serve" docs/``, ``git log
+# --grep="tailscale funnel"`` and a commit message naming a subcommand are not
+# refused: there ``tailscale`` is an argument, not the program.  The wrapper
+# group is ``?``-quantified (never repeated), so it adds no nested repetition.
+# The trailing flag run is the shared idiom ``_linearize_deny_pattern`` rewrites.
+_TAILSCALE_PROGRAM = (
+    "(?:\\A|[;&|\\n`]|\\$\\()[\\s\"'(]*"
+    "(?:(?:sudo|doas|env|nohup|exec|command|time|nice|[a-z_][a-z0-9_]*=\\S*)\\s[^;&|\\n`'\"]*?)?"
+    "(?:[\\w.:/\\\\-]*[/\\\\])?tailscale(?:\\.exe)?(?:\\s+--?[a-z-]+(?:[= ]\\S+)?)*"
+)
+
 
 BUILTIN_DENIED_RULES: list[DeniedCommandRule] = [
     DeniedCommandRule(
@@ -1590,7 +1605,7 @@ BUILTIN_DENIED_RULES: list[DeniedCommandRule] = [
         # --json`` -- the reads Kiro Crew's own status path and any doctor tool
         # use -- allowed; bare ``serve`` (a config dump) is over-blocked, which
         # is the safe direction for a row whose job is to refuse publishing.
-        pattern=".*tailscale(?:\\.exe)?(?:\\s+--?[a-z-]+(?:[= ]\\S+)?)*\\s+serve(?!\\s+(?:status|--help|-h)\\b)\\b.*",
+        pattern=_TAILSCALE_PROGRAM + "\\s+serve(?!\\s+(?:status|--help|-h)\\b)\\b.*",
         category="network-exposure",
         description=(
             "Blocks `tailscale serve` mutations, which publish or withdraw a handler on this "
@@ -1603,7 +1618,7 @@ BUILTIN_DENIED_RULES: list[DeniedCommandRule] = [
         id="network-exposure-tailscale-funnel",
         # Funnel exposes a local service to the PUBLIC internet, which is
         # strictly worse than serve's tailnet-only reach.  Same status carve-out.
-        pattern=".*tailscale(?:\\.exe)?(?:\\s+--?[a-z-]+(?:[= ]\\S+)?)*\\s+funnel(?!\\s+(?:status|--help|-h)\\b)\\b.*",
+        pattern=_TAILSCALE_PROGRAM + "\\s+funnel(?!\\s+(?:status|--help|-h)\\b)\\b.*",
         category="network-exposure",
         description=(
             "Blocks `tailscale funnel`, which exposes a local service to the PUBLIC internet. "
@@ -1642,8 +1657,8 @@ BUILTIN_DENIED_RULES: list[DeniedCommandRule] = [
         # through.  It is a question about the family's shape, and it is tracked
         # separately from the rows themselves.
         pattern=(
-            ".*tailscale(?:\\.exe)?(?:\\s+--?[a-z-]+(?:[= ]\\S+)?)*"
-            "\\s+(?:up|down|set|login|logout|switch|cert|web)(?!\\s+(?:--list|--help|-h)\\b)\\b.*"
+            _TAILSCALE_PROGRAM
+            + "\\s+(?:up|down|set|login|logout|switch|cert|web)(?!\\s+(?:--list|--help|-h)\\b)\\b.*"
         ),
         category="network-exposure",
         description=(
@@ -1664,7 +1679,7 @@ BUILTIN_DENIED_RULES: list[DeniedCommandRule] = [
         # widening.  The carve-out is a deny-by-default lookahead rather than an
         # enumeration of the mutating verbs, so a subcommand tailscale adds later
         # arrives denied instead of arriving unnoticed.
-        pattern=".*tailscale(?:\\.exe)?(?:\\s+--?[a-z-]+(?:[= ]\\S+)?)*\\s+drive(?!\\s+(?:list|--help|-h)\\b)\\b.*",
+        pattern=_TAILSCALE_PROGRAM + "\\s+drive(?!\\s+(?:list|--help|-h)\\b)\\b.*",
         category="network-exposure",
         description=(
             "Blocks `tailscale drive` mutations (`share`, `rename`, `unshare`), which expose a "
@@ -1688,7 +1703,7 @@ BUILTIN_DENIED_RULES: list[DeniedCommandRule] = [
         # not verifiable against a live CLI from where this was written, and a
         # guessed carve-out refuses an ordinary read rather than admitting an
         # exposure. Naming ``cp`` cannot do that.
-        pattern=".*tailscale(?:\\.exe)?(?:\\s+--?[a-z-]+(?:[= ]\\S+)?)*\\s+file\\s+cp(?!\\s+(?:--help|-h)\\b)\\b.*",
+        pattern=_TAILSCALE_PROGRAM + "\\s+file\\s+cp(?!\\s+(?:--help|-h)\\b)\\b.*",
         category="network-exposure",
         description=(
             "Blocks `tailscale file cp`, which pushes a host file to another node on the tailnet "
@@ -1704,10 +1719,7 @@ BUILTIN_DENIED_RULES: list[DeniedCommandRule] = [
         # changing where the agent's own egress appears from; ``disconnect``
         # changes it back.  Both are exposure-state mutations the operator owns.
         # ``list`` and ``suggest`` only report, so both are carved out.
-        pattern=(
-            ".*tailscale(?:\\.exe)?(?:\\s+--?[a-z-]+(?:[= ]\\S+)?)*"
-            "\\s+exit-node(?!\\s+(?:list|suggest|--help|-h)\\b)\\b.*"
-        ),
+        pattern=(_TAILSCALE_PROGRAM + "\\s+exit-node(?!\\s+(?:list|suggest|--help|-h)\\b)\\b.*"),
         category="network-exposure",
         description=(
             "Blocks `tailscale exit-node connect` and `disconnect`, which route this machine's "
@@ -1979,6 +1991,19 @@ _INTERPRETER_RULE_PATTERNS: frozenset[str] = frozenset(
 )
 # ``'p' + 'kill'`` is ONE string by the time the interpreter runs it.
 _LITERAL_CONCAT_RE = re.compile(r"""['"]\s*\+\s*['"]""")
+
+# The tailscale network-exposure rows.  They are ordinary regex-tier rules, but
+# the program name can arrive through a literal same-line assignment
+# (``t=tailscale; "$t" funnel 3000``), which bash expands before argv exists and
+# the raw text never shows.  ``is_denied`` therefore also matches these rows
+# against a copy of the command with those assignments resolved -- the same
+# resolution the ssh-to-self floor applies (``_resolve_line_assignments``).
+# Scoped to this family for the reason ``_INTERPRETER_RULE_PATTERNS`` is scoped:
+# resolving text for every other rule would change inputs they were never
+# measured against.
+_NETWORK_EXPOSURE_RULE_PATTERNS: frozenset[str] = frozenset(
+    r.pattern for r in BUILTIN_DENIED_RULES if r.category == "network-exposure"
+)
 
 
 # ── Back-compat alias ──

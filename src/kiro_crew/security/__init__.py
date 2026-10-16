@@ -1289,6 +1289,28 @@ def is_denied(
                     return _reason(interpreter_pattern)
             except re.error:  # pragma: no cover - patterns are validated at load
                 continue
+    # A literal same-line assignment puts the program name where the raw text
+    # never shows it: ``t=tailscale; "$t" funnel 3000`` runs ``tailscale funnel``.
+    # The network-exposure rows are therefore also matched against the command
+    # with those assignments resolved, segment by segment and through the same
+    # quote-normalized views pass 2 uses, so the resolved ``"tailscale" funnel``
+    # reads as the command it is.  Scoped to that family, like the interpreter
+    # copy above.  An assignment made in an EARLIER tool call, or a value that is
+    # itself computed, is out of reach of any text view and stays the documented
+    # residual; containment there is the OS sandbox and the owner-only publish path.
+    exposure_patterns = [p for p in regex_patterns if p in _rules._NETWORK_EXPOSURE_RULE_PATTERNS]
+    if exposure_patterns:
+        resolved = _argv._resolve_line_assignments(lower)
+        if resolved != lower:
+            for seg in _split_segments(resolved):
+                seg = seg.strip()
+                if not seg:
+                    continue
+                for view in _deny_segment_views(seg):
+                    for exposure_pattern in exposure_patterns:
+                        if _rules._deny_pattern_matches(exposure_pattern, view, True):
+                            _emit_deny_event(tool_name, exposure_pattern, view, raw_segment=seg)
+                            return _reason(exposure_pattern)
     # Ordered (pattern, is_regex) pairs so the two passes share one code path;
     # regex tier first (the effective rule set), then the glob tier.
     all_patterns: list[tuple[str, bool]] = [(p, True) for p in regex_patterns] + [
@@ -2740,6 +2762,7 @@ _EXPORTS: dict[str, str] = {
     "_LEGACY_RULE_ID_BY_PATTERN": "denied_rules",
     "_LINEARIZED_AWS_FLAG_RUN": "denied_rules",
     "_LITERAL_CONCAT_RE": "denied_rules",
+    "_NETWORK_EXPOSURE_RULE_PATTERNS": "denied_rules",
     "_PERM_VERB_MENTION_PATTERNS": "denied_rules",
     "_PRINTENV_AWS_SECRET_PATTERN": "denied_rules",
     "_RULES_BY_ID": "denied_rules",
@@ -3318,6 +3341,7 @@ if TYPE_CHECKING:  # keep the names visible to type checkers and IDEs
         _LEGACY_RULE_ID_BY_PATTERN,
         _LINEARIZED_AWS_FLAG_RUN,
         _LITERAL_CONCAT_RE,
+        _NETWORK_EXPOSURE_RULE_PATTERNS,
         _PERM_VERB_MENTION_PATTERNS,
         _PRINTENV_AWS_SECRET_PATTERN,
         _RULE_ID_BY_PATTERN,
