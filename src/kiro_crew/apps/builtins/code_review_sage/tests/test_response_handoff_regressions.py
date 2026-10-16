@@ -121,3 +121,46 @@ def test_poster_restore_failure_does_not_abort_batch(tmp_path):
     assert succeeded["post_ok"] is True
     report = store.run_dir(run_id, root) / "report" / "report.json"
     assert len(json.loads(report.read_text(encoding="utf-8"))["rows"]) == 2
+
+
+def test_confirmed_delivery_write_failure_does_not_abort_batch(tmp_path, monkeypatch):
+    first = "https://github.com/o/r/pull/1"
+    second = "https://github.com/o/r/pull/2"
+    first_id = D._cid(first)
+    second_id = D._cid(second)
+    root = tmp_path / "app"
+    run_id = "confirm-write-failure"
+    real_write = results.write_result
+
+    def write_result(record, *args, **kwargs):
+        # The confirmed write is the only one carrying `posted_review_id`; fail it
+        # for the first change the way an over-cap record would.
+        if record.get("change_id") == first_id and "posted_review_id" in record:
+            raise ValueError("record exceeds the size cap")
+        return real_write(record, *args, **kwargs)
+
+    monkeypatch.setattr(results, "write_result", write_result)
+
+    def dispatch(task, timeout):
+        if "SINGLE thorough pass" in task:
+            change_id = first_id if first in task else second_id
+            return {"ok": True, "output": _response(task, change_id), "error": ""}
+        return {"ok": True, "output": "done", "error": ""}
+
+    out = D.run_review(
+        [first, second],
+        dispatch=dispatch,
+        root=root,
+        run_id=run_id,
+        post=True,
+        concurrency=1,
+        confirm=lambda *_: "confirmed-draft",
+        archiver=lambda *_: None,
+        generate_report=True,
+    )
+    failed, succeeded = out["per_change"]
+    assert failed["post_ok"] is False
+    assert "could not record confirmed delivery" in failed["post_error"]
+    assert succeeded["post_ok"] is True
+    report = store.run_dir(run_id, root) / "report" / "report.json"
+    assert len(json.loads(report.read_text(encoding="utf-8"))["rows"]) == 2
