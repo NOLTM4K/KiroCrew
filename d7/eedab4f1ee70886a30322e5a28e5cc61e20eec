@@ -1,5 +1,5 @@
 docs/system-specs/modules/learn-cron-dashboard.md
-  h_28f1c1964f9475 3704
+  h_28f1c1964f9475 3649,3704
 src/kiro_crew/dashboard/file_api/project_tree.py
   h_28f1c1964f9475 104-113,130,133-145,503,537,607,731,739-814,828-829,842-848,850,895-900,902-903,914-917,929,934,937-942
 src/kiro_crew/dashboard/handlers/files.py
